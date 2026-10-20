@@ -16,7 +16,7 @@
 
 import pytest
 from docutils.core import publish_doctree
-from hello_ext.hello import HelloDirective
+from sphinx_linkcheck_diff.hello import HelloDirective
 from typing_extensions import override
 
 
