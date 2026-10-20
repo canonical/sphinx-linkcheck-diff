@@ -17,6 +17,8 @@ jobs:
     permissions:
       # contents: read is required to check out this internal repository.
       contents: read
+      # actions: read is required by the SARIF upload step.
+      actions: read
       security-events: write
     steps:
       - name: Checkout
