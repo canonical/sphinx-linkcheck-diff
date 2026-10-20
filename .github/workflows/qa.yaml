@@ -9,6 +9,10 @@ on:
       - "renovate/*"
   pull_request:
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   lint:
     uses: canonical/starflow/.github/workflows/lint-python.yaml@main

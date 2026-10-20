@@ -20,7 +20,7 @@ repos:
         args: [--fix, --exit-non-zero-on-fix]
       # Run the formatter
       - id: ruff-format
-  - repo: https://github.com/pre-commit/mirrors-prettier
+  - repo: https://github.com/rbubley/mirrors-prettier
     rev: "" # Intentionally blank, despite the warning.
     hooks:
       - id: prettier
