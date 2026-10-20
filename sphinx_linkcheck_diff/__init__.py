@@ -19,6 +19,7 @@
 from sphinx.util.typing import ExtensionMetadata
 from sphinx.application import Sphinx
 from .hello import HelloDirective
+from .sphinx_stack_baseline import sphinx_stack_baseline
 
 try:
     from ._version import __version__
@@ -45,4 +46,4 @@ def setup(app: Sphinx) -> ExtensionMetadata:
     }
 
 
-__all__ = ["__version__", "setup"]
+__all__ = ["__version__", "setup", "sphinx_stack_baseline"]
