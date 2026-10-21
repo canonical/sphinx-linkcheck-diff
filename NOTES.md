@@ -58,3 +58,19 @@ pinned SHA: 69 anchors with `-j auto` on 14 cores, 72 with `-j 1`, 70 with
 The design should state that callers needing a reproducible baseline must
 pin `-j 1` (a serial build reads documents in sorted order and collects the
 same set everywhere), or accept that anchor URIs are machine-dependent.
+
+## 5. The collected anchor set also depends on the docs venv's Python
+
+The Stack's Makefile builds the docs venv with whatever `python3` is first
+on PATH, and autodoc introspects the project under that venv's interpreter.
+The same typehint cross-reference can resolve to a different page — and so
+a different anchor — under a different interpreter. (Observed on jubilant at
+a pinned SHA with `-j 1`: `Juju.show_secret`'s `-> RevealedSecret` typehint
+resolves cross-page to the defining module under Python 3.10, which
+linkcheck collects, but same-page to the `__init__.py` re-export under
+Python 3.14, which linkcheck does not.)
+
+The design should state that callers needing a reproducible baseline must
+also pin the docs venv's interpreter (the integration tests pin it to the
+repository's minimum Python, and collect their fixtures under it), or
+accept that anchor URIs are interpreter-dependent as well.

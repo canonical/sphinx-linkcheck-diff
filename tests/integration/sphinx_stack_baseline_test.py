@@ -33,6 +33,14 @@ REPO_ROOT = Path(__file__).parents[2]
 # sorted order and collects the same set on every machine.
 SPHINX_OPTS = "-c . -d _dev/.doctrees -j 1"
 
+# The docs venv's Python version matters as well: autodoc introspects the
+# project under whatever interpreter the docs venv is built with, and the
+# same typehint cross-reference can resolve to a different page — and so a
+# different anchor — under a different interpreter. The tests build the docs
+# venv with the repository's minimum Python and collect the fixtures below
+# under it.
+DOCS_PYTHON = "3.10"
+
 # Reference projects, pinned to their branch heads as of 2026-10-21. To move a
 # pin, update the SHA here and regenerate the expected URI set in
 # tests/integration/sphinx_stack_baseline/.
@@ -43,12 +51,36 @@ PROJECTS = {
 }
 
 
-def _run(*args: str, cwd: Path | None = None) -> None:
-    result = subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=False)
+def _run(
+    *args: str, cwd: Path | None = None, env: dict[str, str] | None = None
+) -> None:
+    result = subprocess.run(
+        args, cwd=cwd, env=env, capture_output=True, text=True, check=False
+    )
     if result.returncode != 0:
         raise AssertionError(
             f"{' '.join(args)} failed:\n{result.stdout}{result.stderr}"
         )
+
+
+def _pinned_env() -> dict[str, str]:
+    """Return the environment with a DOCS_PYTHON interpreter first on PATH.
+
+    The Stack's Makefile builds the docs venv with whatever ``python3`` is
+    first on PATH, so this is how the tests pin that venv's interpreter.
+    """
+    find = subprocess.run(
+        ["uv", "python", "find", DOCS_PYTHON],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if find.returncode != 0:
+        raise AssertionError(
+            f"uv python find {DOCS_PYTHON} failed:\n{find.stdout}{find.stderr}"
+        )
+    python = Path(find.stdout.strip())
+    return {**os.environ, "PATH": f"{python.parent}{os.pathsep}{os.environ['PATH']}"}
 
 
 def _baseline(docs: Path) -> Path:
@@ -69,7 +101,7 @@ def _baseline(docs: Path) -> Path:
         capture_output=True,
         text=True,
         check=False,
-        env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+        env={**_pinned_env(), "PYTHONPATH": str(REPO_ROOT)},
         cwd=docs,
     )
     if result.returncode != 0:
@@ -104,7 +136,7 @@ def _pinned_docs(repo: str, branch: str, sha: str, tmp_path: Path) -> Path:
             encoding="utf-8",
         )
     docs = work / "docs"
-    _run("make", "install", cwd=docs)
+    _run("make", "install", cwd=docs, env=_pinned_env())
     return docs
 
 
