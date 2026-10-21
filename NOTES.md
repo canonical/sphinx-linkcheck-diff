@@ -48,12 +48,17 @@ design should record it so it reads as a choice rather than an oversight.
 
 The design says the helper forwards the project's `SPHINX_OPTS` to the
 collection build, and the Stack's default is `-j auto`. But with parallel
-reads Sphinx merges each chunk's domain data in completion order, and
-cross-reference resolution picks the first match in that order — so which
-page a reference resolves to, and therefore which `#` anchors linkcheck
-collects, varies with the machine's core count. (Observed on jubilant at a
-pinned SHA: 69 anchors with `-j auto` on 14 cores, 72 with `-j 1`, 70 with
-`-j 4`, 73 on a 4-vCPU CI runner.)
+reads Sphinx splits the sorted document list into chunks of
+`len(docnames) // nproc` documents and merges each chunk's domain data in
+completion order, and cross-reference resolution picks the first match in
+that order — so which page a reference resolves to, and therefore which `#`
+anchors linkcheck collects, varies with the machine's core count. (Observed
+on jubilant at a pinned SHA: 69 anchors with `-j auto` on 14 cores, 72 with
+`-j 1`, 70 with `-j 4`.) A parallel build is not uniformly different from a
+serial one, though: references whose pages land in the same chunk resolve
+as in a serial build. On a 4-vCPU CI runner jubilant's 15 documents give a
+chunk size of 3, the reference pages share a chunk, and `-j auto` collects
+the serial set.
 
 The design should state that callers needing a reproducible baseline must
 pin `-j 1` (a serial build reads documents in sorted order and collects the
@@ -66,9 +71,14 @@ on PATH, and autodoc introspects the project under that venv's interpreter.
 The same typehint cross-reference can resolve to a different page — and so
 a different anchor — under a different interpreter. (Observed on jubilant at
 a pinned SHA with `-j 1`: `Juju.show_secret`'s `-> RevealedSecret` typehint
-resolves cross-page to the defining module under Python 3.10, which
-linkcheck collects, but same-page to the `__init__.py` re-export under
+resolves cross-page to the defining module under Python 3.10 and 3.12,
+which linkcheck collects, but same-page to the `__init__.py` re-export under
 Python 3.14, which linkcheck does not.)
+
+This is independent of the parallelism in §4: the same serial build
+collects 73 anchors under Python 3.10 and 3.12 but 72 under 3.14, and under
+3.14 the same project collects 72, 70, or 69 anchors at `-j 1`, `-j 4`, and
+`-j auto`. A reproducible baseline needs both pins.
 
 The design should state that callers needing a reproducible baseline must
 also pin the docs venv's interpreter (the integration tests pin it to the
