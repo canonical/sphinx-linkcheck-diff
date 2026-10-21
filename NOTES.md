@@ -43,3 +43,18 @@ operation or build leaves the helper running indefinitely.
 This is a deliberate scope decision (the design's success criterion is that
 `output.json` exists, and CI can impose its own job-level timeout), but the
 design should record it so it reads as a choice rather than an oversight.
+
+## 4. The collected anchor set depends on Sphinx's read parallelism
+
+The design says the helper forwards the project's `SPHINX_OPTS` to the
+collection build, and the Stack's default is `-j auto`. But with parallel
+reads Sphinx merges each chunk's domain data in completion order, and
+cross-reference resolution picks the first match in that order — so which
+page a reference resolves to, and therefore which `#` anchors linkcheck
+collects, varies with the machine's core count. (Observed on jubilant at a
+pinned SHA: 69 anchors with `-j auto` on 14 cores, 72 with `-j 1`, 70 with
+`-j 4`, 73 on a 4-vCPU CI runner.)
+
+The design should state that callers needing a reproducible baseline must
+pin `-j 1` (a serial build reads documents in sorted order and collects the
+same set everywhere), or accept that anchor URIs are machine-dependent.

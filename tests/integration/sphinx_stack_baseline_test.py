@@ -25,9 +25,13 @@ import pytest
 
 REPO_ROOT = Path(__file__).parents[2]
 
-# The Stack's default SPHINX_OPTS (docs/Makefile), forwarded to the collect
-# build so it runs under the same settings as the project's real build.
-SPHINX_OPTS = "-c . -d _dev/.doctrees -j auto"
+# The Stack's default SPHINX_OPTS (docs/Makefile), except -j: with parallel
+# reads Sphinx merges each chunk's domain data in completion order, and
+# cross-reference resolution picks from that order, so which page a
+# reference resolves to — and therefore which anchors linkcheck collects —
+# varies with the machine's core count. A serial build reads documents in
+# sorted order and collects the same set on every machine.
+SPHINX_OPTS = "-c . -d _dev/.doctrees -j 1"
 
 # Reference projects, pinned to their branch heads as of 2026-10-21. To move a
 # pin, update the SHA here and regenerate the expected URI set in
@@ -120,4 +124,13 @@ def test_sphinx_stack_baseline(repo, branch, sha, tmp_path):
     fixture = Path(__file__).parent / "sphinx_stack_baseline" / f"{repo}.json"
     expected = json.loads(fixture.read_text(encoding="utf-8"))
     assert expected["base_sha"] == sha
+    if data["uris"] != expected["uris"]:
+        print(
+            f"--- collected ({len(data['uris'])}) vs fixture ({len(expected['uris'])}) ---"
+        )
+        print(
+            "docs venv:", (docs / ".venv" / "pip_list.txt").read_text(encoding="utf-8")
+        )
+        print("only collected:", sorted(set(data["uris"]) - set(expected["uris"])))
+        print("only fixture:", sorted(set(expected["uris"]) - set(data["uris"])))
     assert data["uris"] == expected["uris"]
