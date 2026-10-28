@@ -153,3 +153,50 @@ The rest of the design is unchanged: `fetch` already fetches every branch,
 SHA, so a repository's default- and maintenance-branch baselines coexist
 without invalidating each other. An unknown branch fails where it always did,
 in `git rev-parse`, with git's own error.
+
+## 8. End-to-end trial findings (jubilant, `linkcheck-trial`)
+
+The full design was proven end-to-end in a jubilant checkout with the
+extension blocked out as a project-local module (`docs/_dev/linkcheck_diff_ext.py`,
+loaded via a `sys.path.insert` in `conf.py`) and the package's dev version
+editable-installed into the docs venv. Baseline collection (first run:
+auto-collected from `upstream/main` in the worktree), the filtered build
+(69 URIs all `-ignored-`, zero HTTP checks), broken-link detection (changed
+URL, new URL, and a Python-docstring URL all flagged `[broken]` with the
+target exiting 1), `BASE_BRANCH` routing (vs `jubilant-backports`: a second
+baseline collected, cached alongside the first, and the URL set checked
+changed accordingly), and cache hits (ensure-baseline ≈ 2s) all behaved as
+designed. Alternating `make html` and `make linkcheck-diff` never re-parsed
+sources. The findings the implementation must carry:
+
+1. **`'linkcheck'` is not in Sphinx's rebuild-domain typing.**
+   `Config.add` performs no runtime validation — `environment/__init__.py`
+   invalidates only config values whose `rebuild` is `'env'`
+   (`config.filter(frozenset({'env'}))`), so the design's no-re-parse claim
+   holds — but mypy rejects the call against Sphinx's `_ConfigRebuild`
+   `Literal['', 'env', 'epub', 'gettext', 'html', 'applehelp', 'devhelp']`.
+   The shipped extension needs a `# type:` suppression or cast at this one
+   call.
+
+2. **A fork checkout needs a `git remote` matching `conf.py`'s `github_url`.**
+   The collector matches remotes against `github_url`; a gimmegit checkout of
+   a fork has only `origin` = fork, while jubilant's `conf.py` says
+   `https://github.com/canonical/jubilant`. Adding
+   `git remote add upstream https://github.com/canonical/jubilant` resolves
+   it without touching `conf.py` — the mechanism DESIGN.md's limitation 3
+   anticipates ("which may be your fork").
+
+3. **`linkcheck_retries` dominates the broken-link run's wall time.**
+   jubilant's `conf.py` sets `linkcheck_retries = 3`; a rate-limited broken
+   GitHub URL sleeps through retries, so a run with broken links takes minutes
+   even though the baseline step is instant. Not a defect — but worth knowing
+   when interpreting CI timings.
+
+## 9. Extension dormancy and the filtered build both verified
+
+`make html` and `make linkcheck` (with `-D linkcheck_ignore=.*`) both succeed
+with the extension loaded and `linkcheck_diff_baseline` unset: the handler
+returns before reading anything, so nothing outside `linkcheck-diff` is
+affected. The filtered build shows each baseline URI exactly once as
+`-ignored-` (including conf.py-appended `linkcheck_ignore` entries, which are
+simply never reached) and checks zero URLs when the docs match the base.
