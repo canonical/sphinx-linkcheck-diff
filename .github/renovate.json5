@@ -1,4 +1,10 @@
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   extends: ["config:recommended"],
+  // Our commit history isn't conventional-commit-shaped, so Renovate's
+  // semantic-commit auto-detection stays off and its PR titles would fail
+  // starflow's Conventional Commits policy check. Force the family's "build"
+  // type so titles look like "build(deps): update ... action to v...".
+  semanticCommits: "enabled",
+  semanticCommitType: "build",
 }
