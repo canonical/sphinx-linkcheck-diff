@@ -16,13 +16,11 @@
 
 """Collect a linkcheck baseline from a base branch.
 
-Every helper is a library function here, including the collection driver,
-which carries the Canonical Sphinx Stack's defaults: the ``install`` and
-``linkcheck`` Makefile targets it runs and the ``_build/output.json`` it
-reads. ``sphinx_stack_baseline`` is the policy on top, reduced to the
-entry point and the ``html_context`` values it requires. A project whose
-docs build differently copies that module and defines module-local
-versions of any function here whose defaults don't fit.
+These helpers carry the Canonical Sphinx Stack's defaults: the
+``install`` and ``linkcheck`` Makefile targets the collection driver
+runs and the ``_build/output.json`` it reads. The policy on top is
+``sphinx_stack_baseline``. A project whose docs build differently adapts
+a copy of that module.
 """
 
 import contextlib
@@ -73,11 +71,7 @@ def setting(html_context: dict[str, Any], name: str) -> str:
 
 
 def matching_remote(repo_root: Path, github_url: str) -> str:
-    """Return the name of the git remote whose URL matches ``github_url``.
-
-    Both HTTPS and SSH remote URLs normalize to the same ``owner/repo`` slug
-    as ``github_url``, so either checkout form matches.
-    """
+    """Return the name of the git remote whose URL matches ``github_url``."""
     slug = _repo_slug(github_url)
     # git remote -v lists a fetch and a push line per remote; either can match.
     remotes: dict[str, str] = {}
@@ -174,8 +168,7 @@ def parse_uris(output_json: Path) -> list[str]:
     """Return the URIs of a linkcheck ``output.json``, one JSON object per line.
 
     The URIs are in linkcheck's order, one per (document, URI) pair, so a URI
-    referenced from several documents appears several times. ``write_baseline``
-    deduplicates and sorts them.
+    referenced from several documents appears several times.
     """
     lines = output_json.read_text(encoding="utf-8").splitlines()
     return [str(json.loads(line)["uri"]) for line in lines if line]
@@ -217,8 +210,7 @@ def baseline_path(docs_dir: Path, sha: str) -> Path:
 def write_baseline(path: Path, sha: str, uris: list[str]) -> None:
     """Write ``uris`` as the baseline of ``sha`` to ``path``.
 
-    The URIs are deduplicated and sorted, so the ``uris`` of a baseline
-    never change between collections for the same SHA.
+    The URIs are deduplicated and sorted.
     """
     baseline = {
         "base_sha": sha,

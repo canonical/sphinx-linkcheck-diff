@@ -17,15 +17,13 @@
 """Collect a baseline of the base branch's URIs for restricted link checking.
 
 This module is the Canonical Sphinx Stack policy on top of the
-``sphinx_linkcheck_diff.baseline`` library: the ``html_context`` values it
-requires (``github_url``, and ``repo_default_branch`` as the fallback when
-``BASE_BRANCH`` is not in the environment), and the base branch itself, which
-the Makefile target passes to the helper as ``BASE_BRANCH``. Everything else,
-including the collection driver with the Stack's Makefile targets and
-``output.json`` location, is a library function. A project that builds its
-docs differently copies only this module into ``docs/_dev/``, adapts the
-wiring, and defines module-local versions of any library function whose
-defaults don't fit.
+``sphinx_linkcheck_diff.baseline`` library: it provides the entry point
+the Makefile target runs. The base branch is ``BASE_BRANCH`` when set,
+``repo_default_branch`` otherwise, and every setting it reads
+(``repo_default_branch``, ``github_url``) comes from the docs
+``html_context``. A project whose docs build differently copies this
+module into ``docs/_dev/`` and defines module-local versions of the
+library helpers whose defaults don't fit.
 """
 
 import os
@@ -37,16 +35,13 @@ from . import baseline
 def sphinx_stack_baseline(sphinx_opts: str = "") -> Path:
     """Return the path of the base branch's baseline, collecting it if needed.
 
-    The baseline lists every URI the base branch's docs would check. The base
-    branch is ``BASE_BRANCH`` from the environment when set, and
-    ``repo_default_branch`` from ``html_context`` otherwise. The baseline is
-    cached per base SHA under ``_dev/.linkcheck-diff/baselines`` in the docs
-    directory (the current working directory). The path is printed to stdout,
-    which is how the Makefile target captures it.
+    The baseline lists every URI the base branch's docs would check. It is
+    cached under ``_dev/.linkcheck-diff/baselines`` in the docs directory
+    (the current working directory). The path is printed to stdout for the
+    Makefile target to capture.
 
     :param sphinx_opts: the project's ``SPHINX_OPTS``, forwarded to the
         collection build so it runs under the same settings.
-    :returns: the path of the baseline file.
     """
     docs_dir = Path.cwd()
     repo_root = baseline.repo_root(docs_dir)
