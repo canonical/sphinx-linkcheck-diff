@@ -18,7 +18,9 @@
 
 This module is the Canonical Sphinx Stack policy on top of the
 ``sphinx_linkcheck_diff.baseline`` library: the ``html_context`` values it
-requires (``github_url`` and ``repo_default_branch``). Everything else,
+requires (``github_url``, and ``repo_default_branch`` as the fallback when
+``BASE_BRANCH`` is not in the environment), and the base branch itself, which
+the Makefile target passes to the helper as ``BASE_BRANCH``. Everything else,
 including the collection driver with the Stack's Makefile targets and
 ``output.json`` location, is a library function. A project that builds its
 docs differently copies only this module into ``docs/_dev/``, adapts the
@@ -26,6 +28,7 @@ wiring, and defines module-local versions of any library function whose
 defaults don't fit.
 """
 
+import os
 from pathlib import Path
 
 from . import baseline
@@ -34,7 +37,9 @@ from . import baseline
 def sphinx_stack_baseline(sphinx_opts: str = "") -> Path:
     """Return the path of the base branch's baseline, collecting it if needed.
 
-    The baseline lists every URI the base branch's docs would check. It is
+    The baseline lists every URI the base branch's docs would check. The base
+    branch is ``BASE_BRANCH`` from the environment when set, and
+    ``repo_default_branch`` from ``html_context`` otherwise. The baseline is
     cached per base SHA under ``_dev/.linkcheck-diff/baselines`` in the docs
     directory (the current working directory). The path is printed to stdout,
     which is how the Makefile target captures it.
@@ -48,7 +53,9 @@ def sphinx_stack_baseline(sphinx_opts: str = "") -> Path:
     html_context = baseline.html_context(docs_dir / "conf.py")
 
     github_url = baseline.setting(html_context, "github_url")
-    branch = baseline.setting(html_context, "repo_default_branch")
+    branch = os.environ.get("BASE_BRANCH", "")
+    if not branch:
+        branch = baseline.setting(html_context, "repo_default_branch")
 
     remote = baseline.matching_remote(repo_root, github_url)
     baseline.fetch(remote, repo_root)

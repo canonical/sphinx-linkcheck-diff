@@ -111,3 +111,41 @@ every helper as a library module and that the copy surface is the policy
 module alone. The entry point `sphinx_stack_baseline(sphinx_opts)` and its
 stdout contract are unchanged, as is the baseline content: the library's
 `write_baseline` performs the same deduplicate-and-sort the helper did.
+
+## 7. The base branch comes from `BASE_BRANCH`, falling back to `repo_default_branch`
+
+DESIGN.md resolves the base branch as `repo_default_branch` from
+`html_context`: the repository's default branch. A repository with a
+maintenance branch (`1.19-maintenance`, say) has docs that differ
+significantly from the default branch's, and a feature branch may be intended
+to merge into either. Which one is the base is the author's intent, not
+something the helper can detect: a backport descends from the default branch,
+so ancestry can't distinguish "based on" from "targets", and a branch can
+legitimately target either.
+
+The Makefile target therefore takes the base branch as an optional argument.
+Make targets can't take arguments; the idiomatic equivalent is a variable on
+the command line, and the recipe routes it to the helper through the
+environment: the Makefile exports `BASE_BRANCH`, and the helper reads it,
+falling back to `repo_default_branch` when it's unset or empty. The design's
+Makefile snippet gains one line:
+
+```
+export BASE_BRANCH
+```
+
+`make linkcheck-diff` is unchanged: `BASE_BRANCH` is empty, so the base branch
+is `repo_default_branch`. `make linkcheck-diff BASE_BRANCH=1.19-maintenance`
+collects that branch's baseline instead. The environment is the right channel
+for the value: the alternative, interpolating it into the Python code like
+`$(SPHINX_OPTS)`, passes through the recipe's double quotes, where the shell
+would expand a `$` in a refname before Python sees it; the environment hands
+the bytes through untouched. (GNU make exports command-line variables to
+recipes on its own, but the explicit `export` also covers a `BASE_BRANCH`
+assignment inside the Makefile.)
+
+The rest of the design is unchanged: `fetch` already fetches every branch,
+`base_sha` resolves any `remote/<branch>`, and the baseline cache is keyed by
+SHA, so a repository's default- and maintenance-branch baselines coexist
+without invalidating each other. An unknown branch fails where it always did,
+in `git rev-parse`, with git's own error.
