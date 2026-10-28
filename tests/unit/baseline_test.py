@@ -161,6 +161,13 @@ def test_matching_remote_no_remotes(git_repo: Path):
     assert "remotes: none" in str(excinfo.value)
 
 
+def test_fetch_failure_warns(git_repo: Path, tmp_path: Path, capsys):
+    # A failed fetch warns and continues instead of raising.
+    _run("git", "remote", "add", "origin", str(tmp_path / "missing"), cwd=git_repo)
+    baseline.fetch("origin", git_repo)
+    assert "git fetch origin failed" in capsys.readouterr().err
+
+
 def test_base_sha(git_repo: Path):
     sha = _run("git", "rev-parse", "HEAD", cwd=git_repo).strip()
     _run("git", "update-ref", "refs/remotes/origin/main", sha, cwd=git_repo)
