@@ -83,7 +83,7 @@ collects 73 anchors under Python 3.10 and 3.12 but 72 under 3.14, and under
 `-j auto`. A reproducible baseline needs both pins.
 
 The design should state that callers needing a reproducible baseline must
-also pin the docs venv's interpreter (the integration tests pin each project
+also pin the docs venv's interpreter (the functional tests pin each project
 to its own docs requirements' minimum Python — 3.10 for the Stack projects,
 3.11 for microcloud, whose `sphinx-autobuild` pin needs it — and collect their
 fixtures under it), or accept that anchor URIs are interpreter-dependent as

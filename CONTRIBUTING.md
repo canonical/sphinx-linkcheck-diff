@@ -174,7 +174,7 @@ changes stick, restage the modified files with `git add -A` and commit again.
 
 All nontrivial code changes should be accompanied by a reasonable set of tests.
 
-sphinx-ext-template's test suite includes both unit and integration tests. If you're not
+sphinx-ext-template's test suite includes unit, functional, and integration tests. If you're not
 sure which tests you should add, go with your best judgement – additional tests can be
 added during the review process.
 

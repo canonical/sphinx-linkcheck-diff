@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License along with
 # this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Integration tests for the Sphinx Stack baseline collection helper."""
+"""Functional tests for the Sphinx Stack baseline collection helper."""
 
 import json
 import os
@@ -64,7 +64,7 @@ class Project(NamedTuple):
 # Reference projects, pinned to branch heads: sphinx-stack-docs, jubilant,
 # and pebble as of 2026-10-21, microcloud's v3-edge as of 2026-10-28. To move
 # a pin, update the SHA here and regenerate the expected URI set in
-# tests/integration/sphinx_stack_baseline/.
+# tests/functional/sphinx_stack_baseline/.
 PROJECTS = {
     "sphinx-stack-docs": Project("main", "36a13bc810755ea0d672ceefb7230da963423b54"),
     "jubilant": Project("main", "15103ef6039e596d4c236802fa110b43d0a8d106"),
