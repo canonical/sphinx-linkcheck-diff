@@ -19,8 +19,10 @@ The helper therefore mirrors Sphinx and executes conf.py with:
 ```
 
 The design should state this requirement so future implementations don't
-regress it. (The three sample projects only pass by luck: their `tags` usage
-is guarded behind environment variables.)
+regress it. (The three Stack sample projects only pass by luck: their `tags`
+usage is guarded behind environment variables. The fourth, microcloud,
+genuinely exercises the requirement: its `tags.add('integrated')` runs
+whenever `SINGLE_BUILD` is unset, which is the helper's case.)
 
 ## 2. Baseline URIs are deduplicated; byte-stability holds only for the URI list
 
@@ -81,9 +83,11 @@ collects 73 anchors under Python 3.10 and 3.12 but 72 under 3.14, and under
 `-j auto`. A reproducible baseline needs both pins.
 
 The design should state that callers needing a reproducible baseline must
-also pin the docs venv's interpreter (the integration tests pin it to the
-repository's minimum Python, and collect their fixtures under it), or
-accept that anchor URIs are interpreter-dependent as well.
+also pin the docs venv's interpreter (the integration tests pin each project
+to its own docs requirements' minimum Python — 3.10 for the Stack projects,
+3.11 for microcloud, whose `sphinx-autobuild` pin needs it — and collect their
+fixtures under it), or accept that anchor URIs are interpreter-dependent as
+well.
 
 ## 6. The plumbing is library functions; only the policy module is copied
 
