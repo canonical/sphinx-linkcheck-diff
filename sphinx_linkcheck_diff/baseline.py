@@ -73,13 +73,26 @@ def setting(html_context: dict[str, Any], name: str) -> str:
 
 
 def matching_remote(repo_root: Path, github_url: str) -> str:
-    """Return the name of the git remote whose URL matches ``github_url``."""
+    """Return the name of the git remote whose URL matches ``github_url``.
+
+    Both HTTPS and SSH remote URLs normalize to the same ``owner/repo`` slug
+    as ``github_url``, so either checkout form matches.
+    """
     slug = _repo_slug(github_url)
+    # git remote -v lists a fetch and a push line per remote; either can match.
+    remotes: dict[str, str] = {}
     for line in _git("remote", "-v", cwd=repo_root).splitlines():
         name, url = line.split("\t", 1)
-        if _repo_slug(url.removesuffix(" (fetch)").removesuffix(" (push)")) == slug:
+        url = url.removesuffix(" (fetch)").removesuffix(" (push)")
+        remotes.setdefault(name, url)
+        if _repo_slug(url) == slug:
             return name
-    raise RuntimeError(f"no git remote matches github_url {github_url}")
+    listed = ", ".join(f"{name} ({url})" for name, url in remotes.items())
+    raise RuntimeError(
+        f"no git remote matches github_url {github_url} (configured remotes:"
+        f" {listed or 'none'}); add one with:"
+        f" git remote add upstream https://github.com/{slug}"
+    )
 
 
 def fetch(remote: str, repo_root: Path) -> None:
