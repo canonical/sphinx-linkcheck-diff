@@ -84,3 +84,26 @@ The design should state that callers needing a reproducible baseline must
 also pin the docs venv's interpreter (the integration tests pin it to the
 repository's minimum Python, and collect their fixtures under it), or
 accept that anchor URIs are interpreter-dependent as well.
+
+## 6. The plumbing is library functions; only the policy module is copied
+
+DESIGN.md describes the collection helper as a single module where "All git
+and JSON logic lives", which a project with a custom build copies wholesale
+into `docs/_dev/` and adapts. In practice nearly all of that file is plumbing
+that never varies: resolving the repository root, executing `conf.py`,
+matching the remote, fetching with the cached-refs fallback, the temporary
+worktree, parsing `output.json`, and the baseline cache. Only a handful of
+decisions vary with the build: which `html_context` values are required, which
+Makefile targets build the docs, how `SPHINX_OPTS` is composed for the
+collection build, and where the build writes `output.json`.
+
+The package therefore exposes the plumbing as library functions in
+`sphinx_linkcheck_diff.baseline`, and `sphinx_stack_baseline.py` is reduced to
+that policy. A project that builds its docs differently now copies only the
+small policy module and adapts the few decisions in it; the plumbing is
+imported from the installed package. The design should be updated to say the
+package ships the plumbing as a library module and that the copy surface is
+the policy module alone. The entry point `sphinx_stack_baseline(sphinx_opts)`
+and its stdout contract are unchanged, as is the baseline content: the
+library's `write_baseline` performs the same deduplicate-and-sort the helper
+did.

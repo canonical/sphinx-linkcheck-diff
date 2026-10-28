@@ -16,24 +16,20 @@
 
 """Collect a baseline of the base branch's URIs for restricted link checking.
 
-The helper is specific to the Canonical Sphinx Stack: it assumes the Stack's
-``docs/Makefile`` targets (``install`` and ``linkcheck``) and the standard
-``html_context`` values (``github_url`` and ``repo_default_branch``).
+This module is the Canonical Sphinx Stack policy on top of the
+``sphinx_linkcheck_diff.baseline`` library: the ``html_context`` values it
+requires (``github_url`` and ``repo_default_branch``), the Makefile targets
+it runs (``install`` and ``linkcheck``), and where the build writes
+``output.json``. A project that builds its docs differently copies only this
+module into ``docs/_dev/`` and adapts the policy.
 """
 
-import json
 import os
-import shutil
-import subprocess
 import sys
-import tempfile
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sphinx.util.tags import Tags
-
-FETCH_TIMEOUT = 30  # Seconds before falling back to the last fetched refs.
+from . import baseline
 
 
 def sphinx_stack_baseline(sphinx_opts: str = "") -> Path:
@@ -49,27 +45,20 @@ def sphinx_stack_baseline(sphinx_opts: str = "") -> Path:
     :returns: the path of the baseline file.
     """
     docs_dir = Path.cwd()
-    repo_root = Path(_git("rev-parse", "--show-toplevel", cwd=docs_dir).strip())
-    html_context = _html_context(docs_dir / "conf.py")
+    repo_root = baseline.repo_root(docs_dir)
+    html_context = baseline.html_context(docs_dir / "conf.py")
 
-    remote = _matching_remote(repo_root, _setting(html_context, "github_url"))
+    github_url = _setting(html_context, "github_url")
     branch = _setting(html_context, "repo_default_branch")
 
-    _fetch(remote, repo_root)
-    sha = _git("rev-parse", f"{remote}/{branch}", cwd=repo_root).strip()
+    remote = baseline.matching_remote(repo_root, github_url)
+    baseline.fetch(remote, repo_root)
+    sha = baseline.base_sha(repo_root, remote, branch)
 
-    baseline_path = docs_dir / "_dev" / ".linkcheck-diff" / "baselines" / f"{sha}.json"
+    baseline_path = baseline.baseline_path(docs_dir, sha)
     if not baseline_path.is_file():
         uris = _collect(repo_root, docs_dir.relative_to(repo_root), sha, sphinx_opts)
-        baseline = {
-            "base_sha": sha,
-            "collected_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-            "uris": sorted(uris),
-        }
-        baseline_path.parent.mkdir(parents=True, exist_ok=True)
-        baseline_path.write_text(
-            json.dumps(baseline, indent=2) + "\n", encoding="utf-8"
-        )
+        baseline.write_baseline(baseline_path, sha, uris)
 
     print(baseline_path)
     return baseline_path
@@ -82,76 +71,25 @@ def _collect(repo_root: Path, docs_dir: Path, sha: str, sphinx_opts: str) -> lis
     :param docs_dir: docs directory, relative to the repository root.
     :param sha: base head SHA to collect.
     :param sphinx_opts: forwarded ``SPHINX_OPTS`` for the collection build.
-    :returns: the sorted URIs of the base branch.
+    :returns: the URIs of the base branch, in linkcheck's output order.
     """
-    tmp = Path(tempfile.mkdtemp(prefix=".linkcheck-diff-"))
-    worktree = tmp / "base"
-    try:
-        _git("worktree", "add", "--detach", str(worktree), sha, cwd=repo_root)
+    with baseline.worktree(repo_root, sha) as worktree:
         docs = worktree / docs_dir
-        _make("install", docs)
+        baseline.make("install", docs)
         opts = " ".join(
             part for part in (sphinx_opts, "-D linkcheck_ignore=.*") if part
         )
-        build = subprocess.run(
-            ["make", "linkcheck"],
-            cwd=docs,
-            env={**os.environ, "SPHINX_OPTS": opts},
-            capture_output=True,
-            text=True,
+        build = baseline.make(
+            "linkcheck",
+            docs,
             check=False,
+            env={**os.environ, "SPHINX_OPTS": opts},
         )
         output_json = docs / "_build" / "output.json"
         if not output_json.is_file():
             sys.stderr.write(build.stdout + build.stderr)
             raise RuntimeError(f"make linkcheck produced no {output_json}")
-        return _parse_uris(output_json)
-    finally:
-        subprocess.run(
-            ["git", "worktree", "remove", "--force", str(worktree)],
-            cwd=repo_root,
-            capture_output=True,
-            check=False,
-        )
-        shutil.rmtree(tmp, ignore_errors=True)
-
-
-def _html_context(conf_path: Path) -> dict[str, Any]:
-    """Execute the docs ``conf.py`` and return its ``html_context``."""
-    if not conf_path.is_file():
-        raise RuntimeError(
-            f"no conf.py at {conf_path}; run the helper from the docs directory"
-        )
-    namespace: dict[str, Any] = {
-        "__file__": str(conf_path),
-        "tags": Tags(),
-    }
-    exec(compile(conf_path.read_bytes(), str(conf_path), "exec"), namespace)  # noqa: S102
-    if "html_context" not in namespace:
-        raise RuntimeError(f"no html_context in {conf_path}")
-    html_context: dict[str, Any] = namespace["html_context"]
-    return html_context
-
-
-def _matching_remote(repo_root: Path, github_url: str) -> str:
-    """Return the name of the git remote whose URL matches ``github_url``."""
-    slug = _repo_slug(github_url)
-    for line in _git("remote", "-v", cwd=repo_root).splitlines():
-        name, url = line.split("\t", 1)
-        if _repo_slug(url.removesuffix(" (fetch)").removesuffix(" (push)")) == slug:
-            return name
-    raise RuntimeError(f"no git remote matches github_url {github_url}")
-
-
-def _repo_slug(url: str) -> str:
-    """Normalize a GitHub HTTPS or SSH URL to an ``owner/repo`` slug."""
-    url = url.strip().rstrip("/").removesuffix(".git")
-    if "://" in url:
-        url = url.split("://", 1)[1]
-        url = url.split("/", 1)[1] if "/" in url else ""
-    elif ":" in url:
-        url = url.split(":", 1)[1]
-    return url
+        return baseline.parse_uris(output_json)
 
 
 def _setting(html_context: dict[str, Any], name: str) -> str:
@@ -160,55 +98,3 @@ def _setting(html_context: dict[str, Any], name: str) -> str:
     if not value:
         raise RuntimeError(f"{name} is not set in html_context in docs/conf.py")
     return str(value)
-
-
-def _fetch(remote: str, repo_root: Path) -> None:
-    """Fetch the remote, warning to stderr on failure so cached refs can be used."""
-    try:
-        subprocess.run(
-            ["git", "fetch", "--quiet", remote],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            timeout=FETCH_TIMEOUT,
-            check=True,
-        )
-    except subprocess.TimeoutExpired:
-        print(
-            f"linkcheck-diff: git fetch {remote} timed out after"
-            f" {FETCH_TIMEOUT} seconds;"
-            " continuing with the refs from the last successful fetch",
-            file=sys.stderr,
-        )
-    except subprocess.CalledProcessError as exc:
-        print(
-            f"linkcheck-diff: git fetch {remote} failed; continuing with the refs"
-            f" from the last successful fetch:\n{exc.stderr or ''}",
-            file=sys.stderr,
-        )
-
-
-def _make(target: str, cwd: Path) -> None:
-    """Run a Makefile target, dumping its output and raising on failure."""
-    result = subprocess.run(
-        ["make", target], cwd=cwd, capture_output=True, text=True, check=False
-    )
-    if result.returncode != 0:
-        sys.stderr.write(result.stdout + result.stderr)
-        raise RuntimeError(f"make {target} failed in {cwd}")
-
-
-def _parse_uris(output_json: Path) -> list[str]:
-    """Return the sorted URIs of a linkcheck ``output.json`` (JSONL)."""
-    lines = output_json.read_text(encoding="utf-8").splitlines()
-    return sorted({str(json.loads(line)["uri"]) for line in lines if line})
-
-
-def _git(*args: str, cwd: Path) -> str:
-    """Run a git command and return its stdout, raising on failure."""
-    result = subprocess.run(
-        ["git", *args], cwd=cwd, capture_output=True, text=True, check=False
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"git {' '.join(args)} failed:\n{result.stderr}")
-    return result.stdout
