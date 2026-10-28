@@ -18,16 +18,15 @@
 
 This module is the Canonical Sphinx Stack policy on top of the
 ``sphinx_linkcheck_diff.baseline`` library: the ``html_context`` values it
-requires (``github_url`` and ``repo_default_branch``), the Makefile targets
-it runs (``install`` and ``linkcheck``), and where the build writes
-``output.json``. A project that builds its docs differently copies only this
-module into ``docs/_dev/`` and adapts the policy.
+requires (``github_url`` and ``repo_default_branch``). Everything else,
+including the collection driver with the Stack's Makefile targets and
+``output.json`` location, is a library function. A project that builds its
+docs differently copies only this module into ``docs/_dev/``, adapts the
+wiring, and defines module-local versions of any library function whose
+defaults don't fit.
 """
 
-import os
-import sys
 from pathlib import Path
-from typing import Any
 
 from . import baseline
 
@@ -48,8 +47,8 @@ def sphinx_stack_baseline(sphinx_opts: str = "") -> Path:
     repo_root = baseline.repo_root(docs_dir)
     html_context = baseline.html_context(docs_dir / "conf.py")
 
-    github_url = _setting(html_context, "github_url")
-    branch = _setting(html_context, "repo_default_branch")
+    github_url = baseline.setting(html_context, "github_url")
+    branch = baseline.setting(html_context, "repo_default_branch")
 
     remote = baseline.matching_remote(repo_root, github_url)
     baseline.fetch(remote, repo_root)
@@ -57,44 +56,10 @@ def sphinx_stack_baseline(sphinx_opts: str = "") -> Path:
 
     baseline_path = baseline.baseline_path(docs_dir, sha)
     if not baseline_path.is_file():
-        uris = _collect(repo_root, docs_dir.relative_to(repo_root), sha, sphinx_opts)
+        uris = baseline.collect(
+            repo_root, docs_dir.relative_to(repo_root), sha, sphinx_opts
+        )
         baseline.write_baseline(baseline_path, sha, uris)
 
     print(baseline_path)
     return baseline_path
-
-
-def _collect(repo_root: Path, docs_dir: Path, sha: str, sphinx_opts: str) -> list[str]:
-    """Collect the base branch's URIs by building its docs in a temporary worktree.
-
-    :param repo_root: path of the repository root.
-    :param docs_dir: docs directory, relative to the repository root.
-    :param sha: base head SHA to collect.
-    :param sphinx_opts: forwarded ``SPHINX_OPTS`` for the collection build.
-    :returns: the URIs of the base branch, in linkcheck's output order.
-    """
-    with baseline.worktree(repo_root, sha) as worktree:
-        docs = worktree / docs_dir
-        baseline.make("install", docs)
-        opts = " ".join(
-            part for part in (sphinx_opts, "-D linkcheck_ignore=.*") if part
-        )
-        build = baseline.make(
-            "linkcheck",
-            docs,
-            check=False,
-            env={**os.environ, "SPHINX_OPTS": opts},
-        )
-        output_json = docs / "_build" / "output.json"
-        if not output_json.is_file():
-            sys.stderr.write(build.stdout + build.stderr)
-            raise RuntimeError(f"make linkcheck produced no {output_json}")
-        return baseline.parse_uris(output_json)
-
-
-def _setting(html_context: dict[str, Any], name: str) -> str:
-    """Return a required string value from ``html_context``."""
-    value = html_context.get(name, "")
-    if not value:
-        raise RuntimeError(f"{name} is not set in html_context in docs/conf.py")
-    return str(value)

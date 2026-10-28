@@ -16,15 +16,18 @@
 
 """Collect a linkcheck baseline from a base branch.
 
-The functions here are project-independent plumbing: resolving the
-repository, fetching, the temporary worktree, linkcheck output parsing,
-and the baseline cache. ``sphinx_stack_baseline`` adds the Stack-specific
-parts on top; a project whose docs build differently calls these
-functions from its own thin module instead.
+Every helper is a library function here, including the collection driver,
+which carries the Canonical Sphinx Stack's defaults: the ``install`` and
+``linkcheck`` Makefile targets it runs and the ``_build/output.json`` it
+reads. ``sphinx_stack_baseline`` is the policy on top, reduced to the
+entry point and the ``html_context`` values it requires. A project whose
+docs build differently copies that module and defines module-local
+versions of any function here whose defaults don't fit.
 """
 
 import contextlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -59,6 +62,14 @@ def html_context(conf_path: Path) -> dict[str, Any]:
         raise RuntimeError(f"no html_context in {conf_path}")
     context: dict[str, Any] = namespace["html_context"]
     return context
+
+
+def setting(html_context: dict[str, Any], name: str) -> str:
+    """Return a required string value from ``html_context``."""
+    value = html_context.get(name, "")
+    if not value:
+        raise RuntimeError(f"{name} is not set in html_context in docs/conf.py")
+    return str(value)
 
 
 def matching_remote(repo_root: Path, github_url: str) -> str:
@@ -155,6 +166,34 @@ def parse_uris(output_json: Path) -> list[str]:
     """
     lines = output_json.read_text(encoding="utf-8").splitlines()
     return [str(json.loads(line)["uri"]) for line in lines if line]
+
+
+def collect(repo_root: Path, docs_dir: Path, sha: str, sphinx_opts: str) -> list[str]:
+    """Collect the base branch's URIs by building its docs in a temporary worktree.
+
+    :param repo_root: path of the repository root.
+    :param docs_dir: docs directory, relative to the repository root.
+    :param sha: base head SHA to collect.
+    :param sphinx_opts: forwarded ``SPHINX_OPTS`` for the collection build.
+    :returns: the URIs of the base branch, in linkcheck's output order.
+    """
+    with worktree(repo_root, sha) as tree:
+        docs = tree / docs_dir
+        make("install", docs)
+        opts = " ".join(
+            part for part in (sphinx_opts, "-D linkcheck_ignore=.*") if part
+        )
+        build = make(
+            "linkcheck",
+            docs,
+            check=False,
+            env={**os.environ, "SPHINX_OPTS": opts},
+        )
+        output_json = docs / "_build" / "output.json"
+        if not output_json.is_file():
+            sys.stderr.write(build.stdout + build.stderr)
+            raise RuntimeError(f"make linkcheck produced no {output_json}")
+        return parse_uris(output_json)
 
 
 def baseline_path(docs_dir: Path, sha: str) -> Path:

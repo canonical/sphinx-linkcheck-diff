@@ -97,13 +97,17 @@ decisions vary with the build: which `html_context` values are required, which
 Makefile targets build the docs, how `SPHINX_OPTS` is composed for the
 collection build, and where the build writes `output.json`.
 
-The package therefore exposes the plumbing as library functions in
-`sphinx_linkcheck_diff.baseline`, and `sphinx_stack_baseline.py` is reduced to
-that policy. A project that builds its docs differently now copies only the
-small policy module and adapts the few decisions in it; the plumbing is
-imported from the installed package. The design should be updated to say the
-package ships the plumbing as a library module and that the copy surface is
-the policy module alone. The entry point `sphinx_stack_baseline(sphinx_opts)`
-and its stdout contract are unchanged, as is the baseline content: the
-library's `write_baseline` performs the same deduplicate-and-sort the helper
-did.
+The package therefore exposes _all_ helpers as library functions in
+`sphinx_linkcheck_diff.baseline`, including the collection driver `collect`
+(which carries the Stack's defaults: the `install` and `linkcheck` Makefile
+targets and `_build/output.json`) and the required-`html_context`-value
+lookup `setting`. `sphinx_stack_baseline.py` is reduced to pure wiring: the
+entry point and the `html_context` values it requires. A project that builds
+its docs differently copies only that module into `docs/_dev/`, adapts the
+wiring, and defines module-local versions of any library function whose
+defaults don't fit — the entry point calls the module-local version, which
+shadows the library's. The design should be updated to say the package ships
+every helper as a library module and that the copy surface is the policy
+module alone. The entry point `sphinx_stack_baseline(sphinx_opts)` and its
+stdout contract are unchanged, as is the baseline content: the library's
+`write_baseline` performs the same deduplicate-and-sort the helper did.
