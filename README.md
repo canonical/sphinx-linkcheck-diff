@@ -52,4 +52,4 @@ Conduct](https://ubuntu.com/community/ethos/code-of-conduct).
 
 sphinx-linkcheck-diff is released under the [GPL-3.0 license](LICENSE).
 
-© 2025 Canonical Ltd.
+© 2026 Canonical Ltd.
