@@ -48,7 +48,7 @@ extensions = [
 <!-- This is boilerplate. Replace the extension name and GitHub link. -->
 
 You can report any issues or bugs on the project's [GitHub
-repository](https://github.com/canonical/sphinx-ext-template).
+repository](https://github.com/canonical/sphinx-linkcheck-diff).
 
 sphinx-linkcheck-diff is covered by the [Ubuntu Code of
 Conduct](https://ubuntu.com/community/ethos/code-of-conduct).
