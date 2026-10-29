@@ -75,7 +75,7 @@ The `builder-inited` handler:
 
 1. If the builder is not `CheckExternalLinksBuilder`, return.
 2. If `linkcheck_diff_baseline` is empty, return. The extension is dormant, so `make linkcheck` and `make html` are unaffected. Dormancy is only reachable through those commands: the `linkcheck-diff` target always passes a baseline, and the file check in the recipe fails the target before Sphinx starts if the helper produced nothing usable.
-3. Load the baseline JSON. If the path doesn't exist, the file isn't valid JSON, or the JSON lacks a `uris` list, fail the build with an error naming the path. The make target guarantees a valid baseline before invoking Sphinx; this check catches hand-written invocations.
+3. Load the baseline JSON. If the path doesn't exist, the file isn't valid JSON, the JSON lacks a `uris` list, or a `uris` entry isn't a string, fail the build with an error naming the path. The make target guarantees a valid baseline before invoking Sphinx; this check catches hand-written invocations.
 4. Append `^<re.escape(uri)>$` to `linkcheck_ignore` for each URI in the baseline.
 
 Existing `linkcheck_ignore` entries in `conf.py` are preserved — the extension appends, never replaces.

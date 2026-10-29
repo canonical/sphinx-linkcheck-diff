@@ -156,6 +156,16 @@ class TestUnreadableBaseline:
         with pytest.raises(ExtensionError, match=re.escape(str(path))):
             _extension._ignore_baseline_uris(app)
 
+    def test_binary_file(self, tmp_path: Path):
+        # A non-UTF-8 file fails decode, the same unreadable-baseline
+        # error as a missing file.
+        path = tmp_path / "baseline.json"
+        path.write_bytes(b"\xff\xfe\xf1\x00")
+        app = _app(builder=_linkcheck_instance(), baseline=str(path))
+
+        with pytest.raises(ExtensionError, match="can't read baseline"):
+            _extension._ignore_baseline_uris(app)
+
 
 @pytest.mark.parametrize(
     "payload",
@@ -174,7 +184,7 @@ def test_not_a_baseline_raises(payload: str, tmp_path: Path):
 def test_wrong_typed_baseline_still_names_value():
     """A wrong-typed ``linkcheck_diff_baseline`` fails naming the value.
 
-    Sphinx passes a value of the wrong type through with only a warning,
+    Sphinx passes a value of the wrong type through after a warning,
     so the handler must not crash before it can name it in an error.
     """
     app = _app(builder=_linkcheck_instance(), baseline=cast(str, 42))
@@ -203,8 +213,8 @@ def test_non_string_uris_entry_raises(baseline_path: Path):
 def test_tuple_linkcheck_ignore_is_merged(baseline_path: Path):
     """A tuple ``linkcheck_ignore`` gets the baseline patterns merged in.
 
-    Sphinx accepts a tuple from conf.py, and the handler rebuilds the
-    list instead of mutating it, so both forms work.
+    Sphinx accepts a tuple from conf.py, and the handler builds a list
+    holding both the tuple's entries and the baseline patterns.
     """
     config = _FakeConfig(baseline=str(baseline_path), ignore=("why",))
     app = cast(Sphinx, _FakeApp(builder=_linkcheck_instance(), config=config))
