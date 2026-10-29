@@ -238,3 +238,28 @@ The rebind is safe because linkcheck's `HyperlinkAvailabilityChecker` reads
 `linkcheck_ignore` once, in its constructor, which runs in `finish()` — after
 `builder-inited` fires. Sphinx deep-copies config defaults per app, so
 rebinding never leaks into later builds.
+
+## 11. The baseline is the base branch's current head, not the fork point
+
+DESIGN.md has the helper "resolve the head SHA of the base branch": the
+base branch's head at fetch time, however long ago the feature branch
+forked from it. The consequences of that gap deserve a place in the
+design.
+
+The gap is mostly harmless on the base branch's side. Every link the base
+branch added or changed after the fork point is in the baseline and so
+ignored. A link that broke on the base branch after the fork point
+doesn't fail the run either: it is the base's breakage, and the base
+branch's own linkcheck owns it.
+
+The reverse bites. When the base branch fixes a link after the fork
+point — old URI out, new URI in — the baseline holds only the new URI.
+An un-rebased branch still carrying the old one has it checked, and it
+fails, even though the branch never touched that link. `BASE_BRANCH`
+doesn't address this: it chooses which branch to resolve, but still
+resolves that branch's current head.
+
+The failure is loud and a rebase clears it, so this is branch hygiene,
+not a helper defect. The design should state the resolution rule and name
+the un-rebased failure mode, because "it failed on a link I didn't touch"
+reads like a bug until you know it.
