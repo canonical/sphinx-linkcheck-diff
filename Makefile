@@ -10,6 +10,16 @@ format: format-ruff format-codespell format-prettier  ## Run all automatic forma
 .PHONY: lint
 lint: lint-code  ## Run all linters
 
+# This repo's documentation is its markdown files, which prettier lints
+# (see lint-prettier in common.mk). The setup-docs and docs-lint targets
+# exist because starflow's lint workflow calls them; they have nothing
+# to set up beyond the lint environment.
+.PHONY: setup-docs
+setup-docs: setup-lint  ## Set up the documentation environment
+
+.PHONY: docs-lint
+docs-lint: lint-prettier  ## Lint the documentation
+
 .PHONY: lint-code
 lint-code: lint-ruff lint-codespell lint-mypy lint-prettier lint-pyright lint-shellcheck lint-twine  ## Run the code linters
 
