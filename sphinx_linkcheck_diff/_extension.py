@@ -45,28 +45,42 @@ def _ignore_baseline_uris(app: Sphinx) -> None:
     baseline_path = app.config.linkcheck_diff_baseline
     if not baseline_path:
         return
+    # str() first: a wrong-typed value from conf.py would otherwise
+    # crash Path() with a TypeError before the error can name the value.
     try:
         baseline: dict[str, Any] = json.loads(
-            Path(baseline_path).read_text(encoding="utf-8")
+            Path(str(baseline_path)).read_text(encoding="utf-8")
         )
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise ExtensionError(
             f"linkcheck-diff: can't read baseline {baseline_path}: {exc}"
         ) from exc
     # A corrupt baseline can hold other JSON (a list, a string), so the
-    # shape is checked at runtime, not by the annotation.
-    if not isinstance(baseline, dict):  # pyright: ignore[reportUnnecessaryIsInstance]
+    # shape is checked at runtime, not by the annotation. `or`
+    # short-circuits, so `.get` runs only on a dict.
+    if not isinstance(baseline, dict) or not isinstance(  # pyright: ignore[reportUnnecessaryIsInstance]
+        baseline.get("uris"), list
+    ):
         raise ExtensionError(
             f"linkcheck-diff: baseline {baseline_path} has no uris list"
         )
-    if not isinstance(baseline.get("uris"), list):
-        raise ExtensionError(
-            f"linkcheck-diff: baseline {baseline_path} has no uris list"
-        )
-    # Anchored and escaped, so a baseline URI matches itself and nothing else.
-    app.config.linkcheck_ignore.extend(
-        f"^{re.escape(str(uri))}$" for uri in baseline["uris"]
-    )
+    uris: list[str] = []
+    for uri in baseline["uris"]:
+        # A baseline the collector writes holds only strings. A
+        # non-string entry means a hand edit, and hand edits fail loudly.
+        if not isinstance(uri, str):
+            raise ExtensionError(
+                f"linkcheck-diff: baseline {baseline_path} has a uri "
+                f"that is not a string: {uri!r}"
+            )
+        uris.append(uri)
+    # Anchored and escaped, so a baseline URI matches itself and nothing
+    # else. The list is rebuilt rather than extended, so conf.py may give
+    # a tuple.
+    app.config.linkcheck_ignore = [
+        *app.config.linkcheck_ignore,
+        *(f"^{re.escape(uri)}$" for uri in uris),
+    ]
 
 
 def register(app: Sphinx) -> None:

@@ -200,3 +200,41 @@ returns before reading anything, so nothing outside `linkcheck-diff` is
 affected. The filtered build shows each baseline URI exactly once as
 `-ignored-` (including conf.py-appended `linkcheck_ignore` entries, which are
 simply never reached) and checks zero URLs when the docs match the base.
+
+## 10. Adversarial trial findings (extension)
+
+The extension was attacked as a black box in the Jubilant simulation, with
+trial URIs designed as near-misses of the baseline (prefix extensions, query
+additions, subdomain swaps, substring embeds) and as regex metachar traps
+(`*`, `+`, `%`-encoded brackets, punycode hosts). All 11 trials behaved as
+designed: exact recorded forms stay ignored, every near-miss is reported
+broken. The findings the landed extension carries:
+
+1. **URI normalization happens before the extension sees anything.**
+   MyST/docutils percent-encode brackets (`q[e]` → `q%5Be%5D`) and punycode
+   unicode hosts (`canonicãl.example` → `xn--canonicl-xza.example`) at
+   reference-extraction time, so output.json records normalized forms. The
+   pipeline is symmetric — a collected baseline holds the same normalized
+   forms the filtered build compares against — so a hand-written baseline in
+   keyboard form simply never matches anything. No extension-side change;
+   the escape/anchor semantics are what matter, and they held.
+
+2. **`str()` coercion of the baseline path.** Sphinx warns at `config-inited`
+   when `linkcheck_diff_baseline` has a wrong type but passes the value
+   through, so the handler previously crashed with a bare `TypeError` from
+   `Path()` on values such as `42`. The handler now stringifies first and
+   fails with "can't read baseline 42" instead.
+
+3. **Non-string `uris` entries fail loudly.** A hand-edited baseline holding
+   say `13` in `uris` previously produced a garbage pattern `^13$`; now it
+   fails the build naming the entry.
+
+4. **Conf.py's `linkcheck_ignore` may be a tuple.** Sphinx accepts both list
+   and tuple; `.extend()` on a tuple crashed with `AttributeError`. The
+   handler rebuilds the list instead of mutating it: existing entries first,
+   then anchored, escaped baseline patterns.
+
+The rebind is safe because linkcheck's `HyperlinkAvailabilityChecker` reads
+`linkcheck_ignore` once, in its constructor, which runs in `finish()` — after
+`builder-inited` fires. Sphinx deep-copies config defaults per app, so
+rebinding never leaks into later builds.

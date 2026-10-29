@@ -45,9 +45,13 @@ class _FakeBuilder:
 
 
 class _FakeConfig:
-    """Carry the two values the handler reads."""
+    """Carry the two values the handler reads.
 
-    def __init__(self, baseline: str = "", ignore: list[str] | None = None) -> None:
+    ``linkcheck_ignore`` is deliberately untyped: Sphinx takes a list or
+    a tuple from conf.py, and the tests exercise both.
+    """
+
+    def __init__(self, baseline: object = "", ignore: object = None) -> None:
         self.linkcheck_diff_baseline = baseline
         self.linkcheck_ignore = ignore if ignore is not None else []
 
@@ -104,7 +108,7 @@ def test_ignores_baseline_uris(baseline_path: Path):
 
     _extension._ignore_baseline_uris(app)
 
-    # The conf.py entry is preserved, and each baseline URI is appended
+    # The conf.py entry is preserved, and each baseline URI is added
     # anchored and escaped, so a pattern matches its URI and nothing else.
     assert app.config.linkcheck_ignore == [".*bad.*", *_ESCAPED_URIS]
 
@@ -167,10 +171,53 @@ def test_not_a_baseline_raises(payload: str, tmp_path: Path):
         _extension._ignore_baseline_uris(app)
 
 
+def test_wrong_typed_baseline_still_names_value():
+    """A wrong-typed ``linkcheck_diff_baseline`` fails naming the value.
+
+    Sphinx passes a value of the wrong type through with only a warning,
+    so the handler must not crash before it can name it in an error.
+    """
+    app = _app(builder=_linkcheck_instance(), baseline=cast(str, 42))
+
+    with pytest.raises(ExtensionError, match="can't read baseline 42"):
+        _extension._ignore_baseline_uris(app)
+
+
+def test_non_string_uris_entry_raises(baseline_path: Path):
+    """A baseline holding a non-string uri entry fails the build.
+
+    The collector never writes such a baseline, so the entry means a
+    hand edit, and the error names it.
+    """
+    path = baseline_path
+    path.write_text(
+        json.dumps({"uris": ["https://example.com/docs", 13]}),
+        encoding="utf-8",
+    )
+    app = _app(builder=_linkcheck_instance(), baseline=str(path))
+
+    with pytest.raises(ExtensionError, match="not a string: 13"):
+        _extension._ignore_baseline_uris(app)
+
+
+def test_tuple_linkcheck_ignore_is_merged(baseline_path: Path):
+    """A tuple ``linkcheck_ignore`` gets the baseline patterns merged in.
+
+    Sphinx accepts a tuple from conf.py, and the handler rebuilds the
+    list instead of mutating it, so both forms work.
+    """
+    config = _FakeConfig(baseline=str(baseline_path), ignore=("why",))
+    app = cast(Sphinx, _FakeApp(builder=_linkcheck_instance(), config=config))
+
+    _extension._ignore_baseline_uris(app)
+
+    assert config.linkcheck_ignore == ["why", *_ESCAPED_URIS]
+
+
 def test_register_registers():
     """``register()`` adds the config value and connects the handler."""
-    connections = []
     config_values = {}
+    connections = []
 
     class _Registrar:
         def add_config_value(
