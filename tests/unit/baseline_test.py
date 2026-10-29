@@ -47,8 +47,8 @@ def git_repo(tmp_path: Path) -> Path:
     _run("git", "init", "-b", "main", cwd=root)
     _run("git", "config", "user.name", "linkcheck-diff tests", cwd=root)
     _run("git", "config", "user.email", "tests@example.com", cwd=root)
-    (root / "hello.txt").write_text("hello\n", encoding="utf-8")
-    _run("git", "add", "hello.txt", cwd=root)
+    (root / "file.txt").write_text("data\n", encoding="utf-8")
+    _run("git", "add", "file.txt", cwd=root)
     _run("git", "commit", "--quiet", "--message", "initial", cwd=root)
     return root
 
@@ -177,7 +177,7 @@ def test_base_sha(git_repo: Path):
 def test_worktree(git_repo: Path):
     sha = _run("git", "rev-parse", "HEAD", cwd=git_repo).strip()
     with baseline.worktree(git_repo, sha) as tree:
-        assert (tree / "hello.txt").read_text(encoding="utf-8") == "hello\n"
+        assert (tree / "file.txt").read_text(encoding="utf-8") == "data\n"
         tmp = tree.parent
     assert not tmp.exists()
     listing = _run("git", "worktree", "list", cwd=git_repo)
@@ -192,10 +192,10 @@ def test_worktree_bad_sha(git_repo: Path):
 
 def test_make(tmp_path: Path):
     (tmp_path / "Makefile").write_text(
-        "hello:\n\ttouch hello.txt\nfail:\n\texit 1\n", encoding="utf-8"
+        "ok:\n\ttouch file.txt\nfail:\n\texit 1\n", encoding="utf-8"
     )
-    baseline.make("hello", cwd=tmp_path)
-    assert (tmp_path / "hello.txt").is_file()
+    baseline.make("ok", cwd=tmp_path)
+    assert (tmp_path / "file.txt").is_file()
     with pytest.raises(RuntimeError, match="make fail failed"):
         baseline.make("fail", cwd=tmp_path)
 
