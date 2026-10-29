@@ -18,9 +18,7 @@ types = [
     "types-setuptools",
 ]
 dev = [
-    "bs4>=0.0.2",
     "furo>=2025.7.19",
-    "lxml>=5.0",
     "pytest>=8.4.0",
     "pytest-cov~=7.0",
     "pytest-mock~=3.12",
@@ -62,6 +60,9 @@ git_describe_command = [
 [tool.setuptools.packages.find]
 include = ["sphinx_linkcheck_diff"]
 namespaces = false
+
+[tool.setuptools.package-data]
+sphinx_linkcheck_diff = ["py.typed"]
 
 [tool.codespell]
 ignore-words-list = "buildd,crate,keyserver,comandos,ro,dedent,dedented"

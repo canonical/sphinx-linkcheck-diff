@@ -14,12 +14,11 @@
 # You should have received a copy of the GNU General Public License along with
 # this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Adds the baseline filter and the extension's directive to Sphinx."""
+"""Add the linkcheck-diff baseline filter to Sphinx."""
 
 from sphinx.util.typing import ExtensionMetadata
 from sphinx.application import Sphinx
 from . import _extension
-from .hello import HelloDirective
 from .sphinx_stack_baseline import sphinx_stack_baseline
 
 try:
@@ -34,12 +33,11 @@ except ImportError:  # pragma: no cover
 
 
 def setup(app: Sphinx) -> ExtensionMetadata:
-    """Add the baseline filter and the extension's directive to Sphinx.
+    """Add the linkcheck-diff baseline filter to Sphinx.
 
     :returns: ExtensionMetadata
     """
     _extension.register(app)
-    app.add_directive("hello", HelloDirective)
 
     return {
         "version": __version__,

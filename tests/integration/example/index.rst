@@ -1,5 +1,0 @@
-
-Test doc
-========
-
-.. hello:: world
