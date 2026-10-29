@@ -128,7 +128,8 @@ strict = false
 line-length = 88
 target-version = "py310"
 src = ["sphinx_linkcheck_diff", "tests"]
-extend-exclude = ["*/_version.py"]
+# Stored copies of real projects' doc config are fixtures, not our code.
+extend-exclude = ["*/_version.py", "tests/integration/*/conf.py"]
 
 [tool.ruff.format]
 docstring-code-format = true
