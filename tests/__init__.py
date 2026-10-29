@@ -1,4 +1,4 @@
-# This file is part of sphinx-ext-template.
+# This file is part of sphinx-linkcheck-diff.
 #
 # Copyright 2025 Canonical Ltd.
 #
