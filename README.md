@@ -3,25 +3,18 @@
 <!-- Answer elevator-pitch questions about the extension – What is it? What does it do? What
 essential problem does it solve? -->
 
-sphinx-linkcheck-diff adds a `linkcheck-diff` Makefile target to Sphinx Stack
-projects: it runs Sphinx's linkcheck build restricted to the links that are new
-or changed relative to the project's base branch.
+sphinx-linkcheck-diff adds a Sphinx directive that generates a custom greeting.
 
 ## Basic usage
 
 <!-- Provide a few examples of the extension's most common use cases. Remember the Pareto
 principle! -->
 
-To adopt it in a project's docs, add the package to `docs/requirements.txt`,
-add `sphinx_linkcheck_diff` to the `extensions` list in `conf.py`, and add the
-`linkcheck-diff` target to the docs Makefile. Then run:
+To generate a greeting, add the `hello` directive to your document:
 
-```bash
-make linkcheck-diff
 ```
-
-The first run collects the base branch's links as a baseline; later runs check
-only new or changed links against the network.
+.. hello:: world!
+```
 
 ## Project setup
 
@@ -48,7 +41,7 @@ extensions = [
 <!-- This is boilerplate. Replace the extension name and GitHub link. -->
 
 You can report any issues or bugs on the project's [GitHub
-repository](https://github.com/canonical/sphinx-linkcheck-diff).
+repository](https://github.com/canonical/sphinx-ext-template).
 
 sphinx-linkcheck-diff is covered by the [Ubuntu Code of
 Conduct](https://ubuntu.com/community/ethos/code-of-conduct).
