@@ -124,10 +124,9 @@ To adopt it in a project:
 
 # **Known limitations**
 
-1. **No re-checking existing links.** A URL that was fine when the baseline was collected but later rots is not caught. Use `make linkcheck` for a full check.
-2. **The first diff for a base SHA is slow.** Collection is a venv install plus a full Sphinx build. Subsequent diffs reuse the cache.
-3. **Requires an upstream remote and one successful fetch.** Without a remote matching `github_url`, or before the first fetch, the base SHA can't be resolved and the command errors. Here "upstream" means the repo the docs describe, discovered from `github_url` — which may be your fork. A fork checkout fixes this with `git remote add upstream https://github.com/<org>/<project>`; the helper's error names the remedy.
-4. **Assumes the Sphinx Stack Makefile targets.** The helper runs `make install` and `make linkcheck` inside the worktree. A project with different targets copies the policy module and adapts its wiring (see "Implementation and packaging").
+1. **The first diff for a base SHA is slow.** Collection is a venv install plus a full Sphinx build. Subsequent diffs reuse the cache.
+2. **Requires an upstream remote and one successful fetch.** Without a remote matching `github_url`, or before the first fetch, the base SHA can't be resolved and the command errors. Here "upstream" means the repo the docs describe, discovered from `github_url` — which may be your fork. A fork checkout fixes this with `git remote add upstream https://github.com/<org>/<project>`; the helper's error names the remedy.
+3. **Assumes the Sphinx Stack Makefile targets.** The helper runs `make install` and `make linkcheck` inside the worktree. A project with different targets copies the policy module and adapts its wiring (see "Implementation and packaging").
 
 # **CI caching**
 
