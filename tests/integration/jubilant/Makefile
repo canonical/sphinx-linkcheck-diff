@@ -102,6 +102,7 @@ clean: clean-doc
 clean-doc:
 	git clean -fx "$(DOCS_BUILDDIR)"
 	rm -rf $(DEV_DIR)/.doctrees
+	rm -rf $(DEV_DIR)/.linkcheck-diff
 
 linkcheck: install
 	. $(DOCS_VENV) ; $(SPHINX_BUILD) -b linkcheck -q "$(DOCS_SOURCEDIR)" "$(DOCS_BUILDDIR)" $(SPHINX_OPTS) || { grep --color -F "[broken]" "$(DOCS_BUILDDIR)/output.txt"; exit 1; }

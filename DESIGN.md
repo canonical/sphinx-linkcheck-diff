@@ -82,7 +82,7 @@ The install dominates the collection time. The Sphinx build itself is a small fr
 
 Baselines live at `docs/_dev/.linkcheck-diff/baselines/<sha>.json`, one file per base SHA. The `_dev` directory already holds regenerable build caches such as `.doctrees`, and this follows that convention.
 The Sphinx Stack's `docs/.gitignore` doesn't ignore `_dev` wholesale; it lists its caches one by one. That leaves `.linkcheck-diff` uncovered, so add `_dev/.linkcheck-diff/` to `docs/.gitignore` (step 4 of the adopt steps).
-Neither `make clean-doc` nor `make clean` removes the directory. Deleting it by hand is always safe — the next diff recollects.
+Neither `make clean-doc` nor `make clean` removes the directory by default. To match how the Stack's other `_dev` caches are cleaned, add `rm -rf $(DEV_DIR)/.linkcheck-diff` to the `clean-doc` target. Deleting it by hand is always safe — the next diff recollects.
 
 Each baseline records its own SHA and collection time:
 
