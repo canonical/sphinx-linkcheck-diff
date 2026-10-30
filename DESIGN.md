@@ -1,5 +1,3 @@
-**For agents:** This file is frozen. Do not update it.
-
 # **Goal**
 
 Add a restricted link check to any Sphinx project: only URLs that are new or changed relative to the base branch are checked. The existing `make linkcheck` command is unchanged and checks all links.
@@ -48,17 +46,17 @@ If a step fails, `make linkcheck-diff` fails with a clear error. It never silent
 
 # **Architecture**
 
-| Component             | Lives in                                                                      | Purpose                                                                                                                   |
-| :-------------------- | :---------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------ |
-| **Sphinx extension**  | `sphinx_linkcheck_diff` pip package, registered in `conf.py`                  | Given a baseline path, append its URLs to `linkcheck_ignore`. No git, no subprocesses, no state.                          |
-| **Collection helper** | `sphinx_linkcheck_diff.sphinx_stack_baseline`, a single module in the package | Resolve the base head SHA, check the cache, and on a miss run the isolated collection. All git and JSON logic lives here. |
-| **Makefile target**   | `docs/Makefile`                                                               | Call the helper, then run the linkcheck build with the baseline path.                                                     |
-| **Baseline cache**    | `docs/_dev/.linkcheck-diff/baselines/`                                        | SHA-keyed baseline files. A cache hit is a file existence check.                                                          |
+| Component             | Lives in                                                                      | Purpose                                                                                                                                                                        |
+| :-------------------- | :---------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sphinx extension**  | `sphinx_linkcheck_diff` pip package, registered in `conf.py`                  | Given a baseline path, append its URLs to `linkcheck_ignore`. No git, no subprocesses, no state.                                                                               |
+| **Collection helper** | `sphinx_linkcheck_diff.sphinx_stack_baseline`, a policy module in the package | Resolve the base head SHA, check the cache, and on a miss run the isolated collection. The git and JSON plumbing lives in the `sphinx_linkcheck_diff.baseline` library module. |
+| **Makefile target**   | `docs/Makefile`                                                               | Call the helper, then run the linkcheck build with the baseline path.                                                                                                          |
+| **Baseline cache**    | `docs/_dev/.linkcheck-diff/baselines/`                                        | SHA-keyed baseline files. A cache hit is a file existence check.                                                                                                               |
 
 Principles behind the split:
 
 - The extension is generic Sphinx. It knows one thing: the baseline path. It never learns where the file came from.
-- The helper is specific to the Canonical Sphinx Stack: it assumes the Stack's Makefile targets and the standard `html_context` values. It is a single file so a project with a custom build can copy it into `docs/_dev/`, adapt it, and point the Makefile at the copy.
+- The helper is specific to the Canonical Sphinx Stack: it assumes the Stack's Makefile targets and the standard `html_context` values. A project with a custom build copies only the policy module into `docs/_dev/`, edits its wiring, and points the Makefile at the copy. The plumbing stays in the library.
 - The Makefile owns the user-facing build. The project's own variables and recipes do the work.
 - A cache entry always matches the SHA in its file name, so a baseline can never be silently wrong for the base it claims. If the base moves, the new SHA misses and the collection runs again.
 - Everything outside the cache directory is temporary. The worktree, venv, and build directory are removed after collection.
@@ -90,10 +88,10 @@ The `sphinx_opts` argument carries the project's `SPHINX_OPTS` value. The helper
 
 The helper's flow:
 
-1. Read `github_url` and `repo_default_branch` from `html_context` in the docs `conf.py`. It executes `conf.py` in a fresh namespace — the same file Sphinx executes on every build.
+1. Read `github_url` and `repo_default_branch` from `html_context` in the docs `conf.py`. It executes `conf.py` in a fresh namespace — the same file Sphinx executes on every build. The namespace provides `__file__` and a `Tags` instance, as Sphinx's own `eval_config_file` does, so a `conf.py` that calls `tags.add()` unguarded executes.
 2. Find the remote: run `git remote -v` from the repo root and match remote URLs against `github_url`. Both HTTPS (`https://github.com/owner/repo`) and SSH (`git@github.com:owner/repo`) forms are matched, and the `.git` suffix is normalized on both sides, so no remote name is assumed.
 3. Fetch the remote with `git fetch <remote>`, which updates the remote-tracking ref. The fetch runs with a timeout of about 30 seconds. DNS failures exit immediately with a clear message, but an unreachable host can block for minutes, and git's own HTTP timeout settings don't cover the TCP connect phase. If the fetch fails or times out, print a warning to stderr and continue with the tracking ref from the last successful fetch. Warnings go to stderr because stdout carries only the baseline path.
-4. Resolve the base head SHA from the remote-tracking ref `<remote>/<repo_default_branch>`. If the ref can't be resolved, error out.
+4. Resolve the base head SHA from the remote-tracking ref `<remote>/<base>`, where the base branch is `BASE_BRANCH` when set and `repo_default_branch` otherwise. If the ref can't be resolved, error out.
 5. If the cache holds a baseline for this SHA, return its path.
 6. Otherwise, collect one (below), write it to the cache, and return its path.
 
@@ -108,6 +106,8 @@ On a cache miss, the helper runs the collection inside a worktree, using the pro
 3. Run `make linkcheck` inside the worktree, with `SPHINX_OPTS="<sphinx_opts> -D linkcheck_ignore=.*"`. The command-line override replaces the Makefile's `SPHINX_OPTS` wholesale; the forwarded opts keep the project's settings, and the ignore-all flag makes the build discover every URL without checking it. The override also replaces the base branch's own `linkcheck_ignore`, which `.*` makes harmless. Sphinx's `HyperlinkCollector` still discovers every URL and writes `output.json`.
 4. Parse `output.json` (JSONL, one object per line) and extract the `uri` fields.
 5. Remove the worktree, the venv, and the build directory.
+
+The `make install` and `make linkcheck` steps have no timeout. This is deliberate: CI can impose its own job-level timeout. Only the fetch is time-bounded.
 
 The install dominates the collection time. The Sphinx build itself is a small fraction of it.
 The success criterion is `output.json` existing, not the exit code. Sphinx writes all results to `output.json` before setting its failure exit code, so a base branch with broken links still produces a complete URL set. Harder failures (a bad `conf.py`, missing dependencies) produce no `output.json` at all, and the collection fails with the build's error output.
@@ -127,30 +127,34 @@ Each baseline records its own SHA and collection time:
 }
 ```
 
-The SHA makes every entry self-describing: the file name, the `base_sha` field, and the base branch state always agree. The URIs are sorted, so rewriting a baseline for the same SHA always produces the same bytes.
+The SHA makes every entry self-describing: the file name, the `base_sha` field, and the base branch state always agree. The URI list is deduplicated and sorted, so re-collecting the same SHA reproduces the same URI list; `collected_at` records the time and differs between recollections.
 
 # **Makefile target**
 
 ```
 linkcheck-diff: install
-	@CODE="from sphinx_linkcheck_diff import sphinx_stack_baseline; sphinx_stack_baseline('$(SPHINX_OPTS)')"; \
+	@export BASE_BRANCH; \
+	CODE="from sphinx_linkcheck_diff import sphinx_stack_baseline; sphinx_stack_baseline('$(SPHINX_OPTS)')"; \
 	BASELINE=$$(. $(DOCS_VENV); python3 -c "$$CODE"); \
 	if [ ! -f "$$BASELINE" ]; then echo "linkcheck-diff: baseline collection failed" >&2; exit 1; fi; \
 	. $(DOCS_VENV); $(SPHINX_BUILD) -b linkcheck "$(DOCS_SOURCEDIR)" "$(DOCS_BUILDDIR)" $(SPHINX_OPTS) -D linkcheck_diff_baseline="$$BASELINE" || { grep --color -F "[broken]" "$(DOCS_BUILDDIR)/output.txt"; exit 1; }
 ```
 
-The target differs from `linkcheck` only in the baseline step and the `-D` flag. It does not pass `-q`: the per-URL output is the point of the command.
+The target differs from `linkcheck` only in the `export BASE_BRANCH` line, the baseline step, and the `-D` flag. It does not pass `-q`: the per-URL output is the point of the command.
+
+The recipe exports `BASE_BRANCH` into the helper's environment. The helper reads it and falls back to `repo_default_branch` when it's unset or empty, so which branch is the base is the author's intent: `make linkcheck-diff` uses the default branch, and `make linkcheck-diff BASE_BRANCH=1.19-maintenance` collects a maintenance branch's baseline instead. The environment is the right channel for the value because the helper's Python code is composed inside the recipe's double quotes, where the shell would expand a `$` in a refname before Python sees it; the environment hands the bytes through untouched. The cache is keyed by SHA, so a repository's default- and maintenance-branch baselines coexist without invalidating each other.
 
 The recipe defines the Python invocation in a shell variable on its own line, then captures the helper's stdout on the next line. This flattens the quoting: the Python code sits in a double-quoted shell string with no command substitution around it, and `$(SPHINX_OPTS)` interpolates inside single quotes. The recipe is one shell invocation (the backslashes continue the line), so `$$BASELINE` carries the baseline path into the `-D` argument. The file check propagates a helper failure: a command substitution discards the exit code, so the only failure signal is bad stdout. The check requires an existing file, not just a non-empty string, so partial or garbage output can't reach the build. If the check fails, the target exits before Sphinx runs — a full check never happens.
 
 # **Implementation and packaging**
 
-The pip package is `sphinx-linkcheck-diff`, listed in `docs/requirements.txt`. It ships two modules:
+The pip package is `sphinx-linkcheck-diff`, listed in `docs/requirements.txt`. It ships three modules:
 
 - `sphinx_linkcheck_diff._extension` — the extension, registered as `sphinx_linkcheck_diff`.
-- `sphinx_linkcheck_diff.sphinx_stack_baseline` — the collection helper, exported from the package root as `sphinx_stack_baseline`.
+- `sphinx_linkcheck_diff.baseline` — the library: the git and JSON plumbing (repo root, `conf.py` execution, remote matching, fetch and fallback, worktree, `output.json` parsing, cache, baseline writing), including the collection driver `collect`, which carries the Stack's defaults (`make install`, `make linkcheck`, `_build/output.json`).
+- `sphinx_linkcheck_diff.sphinx_stack_baseline` — the policy module: the entry point and the `html_context` values it requires, exported from the package root as `sphinx_stack_baseline`.
 
-The helper is Stack-specific by design. A project that builds its docs differently copies `sphinx_stack_baseline.py` into `docs/_dev/`, adapts it, and points the Makefile recipe at the copy instead of the `python3 -c` import. The interface is the same: print the baseline path.
+The helper is Stack-specific by design. A project that builds its docs differently copies only `sphinx_stack_baseline.py` into `docs/_dev/` and edits its wiring: swap the `html_context` values, or replace a `baseline.*` call with a call to a local function that fits the build. The project then points its Makefile recipe at the copy instead of the `python3 -c` import. The interface is the same: print the baseline path.
 
 To adopt it in a project:
 
@@ -162,8 +166,8 @@ To adopt it in a project:
 
 1. **No re-checking existing links.** A URL that was fine when the baseline was collected but later rots is not caught. Use `make linkcheck` for a full check.
 2. **The first diff for a base SHA is slow.** Collection is a venv install plus a full Sphinx build. Subsequent diffs reuse the cache.
-3. **Requires an upstream remote and one successful fetch.** Without a remote matching `github_url`, or before the first fetch, the base SHA can't be resolved and the command errors. Here "upstream" means the repo the docs describe, discovered from `github_url` — which may be your fork.
-4. **Assumes the Sphinx Stack Makefile targets.** The helper runs `make install` and `make linkcheck` inside the worktree. A project with different targets copies and adapts the helper (see "Implementation and packaging").
+3. **Requires an upstream remote and one successful fetch.** Without a remote matching `github_url`, or before the first fetch, the base SHA can't be resolved and the command errors. Here "upstream" means the repo the docs describe, discovered from `github_url` — which may be your fork. A fork checkout fixes this with `git remote add upstream https://github.com/<org>/<project>`; the helper's error names the remedy.
+4. **Assumes the Sphinx Stack Makefile targets.** The helper runs `make install` and `make linkcheck` inside the worktree. A project with different targets copies the policy module and adapts its wiring (see "Implementation and packaging").
 
 # **CI caching**
 

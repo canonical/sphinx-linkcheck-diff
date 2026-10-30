@@ -71,7 +71,8 @@ def test_html_context(tmp_path: Path):
 
 
 def test_html_context_tags(tmp_path: Path):
-    # A conf.py that calls tags.add() unguarded must execute (NOTES §1).
+    # A conf.py that calls tags.add() unguarded must execute: the namespace
+    # mirrors Sphinx's eval_config_file, which always provides a Tags object.
     conf = tmp_path / "conf.py"
     conf.write_text('tags.add("branch")\nhtml_context = {}\n', encoding="utf-8")
     assert baseline.html_context(conf) == {}
@@ -234,3 +235,25 @@ def test_write_baseline(tmp_path: Path):
     assert data["base_sha"] == "abc123"
     assert datetime.fromisoformat(data["collected_at"])
     assert data["uris"] == ["https://example.com/a", "https://example.com/b"]
+
+
+def test_write_baseline_rewrite_stable(tmp_path: Path):
+    path = baseline.baseline_path(tmp_path, "abc123")
+    baseline.write_baseline(
+        path, "abc123", ["https://example.com/a", "https://example.com/b"]
+    )
+    first = json.loads(path.read_text(encoding="utf-8"))
+    baseline.write_baseline(
+        path,
+        "abc123",
+        ["https://example.com/b", "https://example.com/b", "https://example.com/a"],
+    )
+    second = json.loads(path.read_text(encoding="utf-8"))
+    assert (
+        first["uris"]
+        == second["uris"]
+        == [
+            "https://example.com/a",
+            "https://example.com/b",
+        ]
+    )

@@ -22,8 +22,9 @@ the Makefile target runs. The base branch is ``BASE_BRANCH`` when set,
 ``repo_default_branch`` otherwise, and every setting it reads
 (``repo_default_branch``, ``github_url``) comes from the docs
 ``html_context``. A project whose docs build differently copies this
-module into ``docs/_dev/`` and defines module-local versions of the
-library helpers whose defaults don't fit.
+module into ``docs/_dev/`` and edits the wiring: swap the
+``html_context`` values, or replace a ``baseline.*`` call with a call
+to a local function that fits the build.
 """
 
 import os
