@@ -31,9 +31,7 @@ After adding sphinx-linkcheck-diff to your Python project, update your conf.py f
 sphinx-linkcheck-diff as one of its extensions:
 
 ```python
-extensions = [
-    "sphinx_linkcheck_diff"
-]
+extensions = ["sphinx_linkcheck_diff"]
 ```
 
 ## Community and support

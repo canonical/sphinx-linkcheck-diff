@@ -58,11 +58,17 @@ Existing `linkcheck_ignore` entries in `conf.py` are preserved — the extension
 
 # **Collection helper**
 
-The helper is `sphinx_stack_baseline(sphinx_opts='')`, exported from the package root and defined in `sphinx_linkcheck_diff/sphinx_stack_baseline.py`. The Makefile invokes it with `python3 -c`. It resolves the docs directory and cache location from its working directory, so no paths are needed in the standard setup. It prints the baseline path to stdout and returns it. The Makefile captures the printed path.
+The helper is `sphinx_stack_baseline(sphinx_opts='')`, exported from the package root and defined in `sphinx_linkcheck_diff/sphinx_stack_baseline.py`. The Makefile runs it with `python -m sphinx_linkcheck_diff`, which reports a failure as a single `linkcheck-diff:` line instead of a traceback. It resolves the docs directory and cache location from its working directory, so no paths are needed in the standard setup. It prints the baseline path to stdout and returns it. The Makefile captures the printed path.
 
 The `sphinx_opts` argument carries the project's `SPHINX_OPTS` value. The helper forwards it to `make linkcheck` inside the worktree, so the collect build runs under the same settings as the project's real build.
 
 The helper reads `github_url` and `repo_default_branch` from `html_context` in the docs `conf.py`, finds the git remote matching `github_url`, fetches it, and resolves the base head SHA from the remote-tracking ref. Warnings go to stderr, leaving stdout to the baseline path.
+
+## **Prerequisites**
+
+The helper needs a git remote matching `github_url` and one successful fetch before it can resolve the base SHA. `github_url` names the repo the docs describe, which is your upstream when you work from a fork. Add the remote with `git remote add upstream https://github.com/<org>/<project>`.
+
+If the remote is missing, or the fetch has never succeeded, `make linkcheck-diff` fails. The error lists the configured remotes and names both remedies: correct `github_url` in `conf.py`, or add a matching remote.
 
 ## **Isolated baseline collection**
 
@@ -74,7 +80,8 @@ The install dominates the collection time. The Sphinx build itself is a small fr
 
 # **Baseline cache**
 
-Baselines live at `docs/_dev/.linkcheck-diff/baselines/<sha>.json`, one file per base SHA. The `_dev` directory already holds regenerable build caches such as `.doctrees`, and this follows that convention. Add `_dev/.linkcheck-diff/` to `docs/.gitignore`.
+Baselines live at `docs/_dev/.linkcheck-diff/baselines/<sha>.json`, one file per base SHA. The `_dev` directory already holds regenerable build caches such as `.doctrees`, and this follows that convention.
+The Sphinx Stack's `docs/.gitignore` doesn't ignore `_dev` wholesale; it lists its caches one by one. That leaves `.linkcheck-diff` uncovered, so add `_dev/.linkcheck-diff/` to `docs/.gitignore` (step 4 of the adopt steps).
 Neither `make clean-doc` nor `make clean` removes the directory. Deleting it by hand is always safe — the next diff recollects.
 
 Each baseline records its own SHA and collection time:
@@ -94,17 +101,15 @@ The SHA makes every entry self-describing: the file name, the `base_sha` field, 
 ```
 linkcheck-diff: install
 	@export BASE_BRANCH; \
-	CODE="from sphinx_linkcheck_diff import sphinx_stack_baseline; sphinx_stack_baseline('$(SPHINX_OPTS)')"; \
-	BASELINE=$$(. $(DOCS_VENV); python3 -c "$$CODE"); \
-	if [ ! -f "$$BASELINE" ]; then echo "linkcheck-diff: baseline collection failed" >&2; exit 1; fi; \
+	BASELINE=$$(. $(DOCS_VENV); python3 -m sphinx_linkcheck_diff '$(SPHINX_OPTS)') || exit 1; \
 	. $(DOCS_VENV); $(SPHINX_BUILD) -b linkcheck "$(DOCS_SOURCEDIR)" "$(DOCS_BUILDDIR)" $(SPHINX_OPTS) -D linkcheck_diff_baseline="$$BASELINE" || { grep --color -F "[broken]" "$(DOCS_BUILDDIR)/output.txt"; exit 1; }
 ```
 
 The target differs from `linkcheck` only in the `export BASE_BRANCH` line, the baseline step, and the `-D` flag. It does not pass `-q`: the per-URL output is the point of the command.
 
-The recipe exports `BASE_BRANCH` into the helper's environment. The helper reads it and falls back to `repo_default_branch` when it's unset or empty, so which branch is the base is the author's intent: `make linkcheck-diff` uses the default branch, and `make linkcheck-diff BASE_BRANCH=1.19-maintenance` collects a maintenance branch's baseline instead. The environment is the right channel for the value: the helper's Python code is composed inside the recipe's double quotes, so a `$` in the value would be shell-expanded before Python sees it. The cache is keyed by SHA, so a repository's default- and maintenance-branch baselines coexist without invalidating each other.
+The recipe exports `BASE_BRANCH` into the helper's environment. The helper reads it and falls back to `repo_default_branch` when it's unset or empty, so which branch is the base is the author's intent: `make linkcheck-diff` uses the default branch, and `make linkcheck-diff BASE_BRANCH=1.19-maintenance` collects a maintenance branch's baseline instead. The cache is keyed by SHA, so a repository's default- and maintenance-branch baselines coexist without invalidating each other.
 
-If the helper produced no usable baseline, the file check fails the target before Sphinx runs.
+If the helper fails, it prints one `linkcheck-diff:` line and exits nonzero, which stops the recipe before Sphinx runs.
 
 # **Implementation and packaging**
 
@@ -114,19 +119,14 @@ The pip package is `sphinx-linkcheck-diff`, listed in `docs/requirements.txt`. I
 - `sphinx_linkcheck_diff.baseline` — the library: the git and JSON plumbing (repo root, `conf.py` execution, remote matching, fetch and fallback, worktree, `output.json` parsing, cache, baseline writing), including the collection driver `collect`, which carries the Stack's defaults (`make install`, `make linkcheck`, `_build/output.json`).
 - `sphinx_linkcheck_diff.sphinx_stack_baseline` — the policy module: the entry point and the `html_context` values it requires, exported from the package root as `sphinx_stack_baseline`.
 
-The helper is Stack-specific by design. A project that builds its docs differently copies only `sphinx_stack_baseline.py` into `docs/_dev/` and edits its wiring: swap the `html_context` values, or replace a `baseline.*` call with a call to a local function that fits the build. The project then points its Makefile recipe at the copy instead of the `python3 -c` import. The interface is the same: print the baseline path.
+The helper supports standard Sphinx Stack projects by default. If your project builds its docs differently, vendor the policy module: copy `sphinx_stack_baseline.py` into `docs/_dev/` and adapt its wiring. Swap the `html_context` values, or replace a `baseline.*` call with a call to a local function that fits the build. Then point the Makefile recipe at the copy instead of the installed module. The interface is the same: print the baseline path.
 
 To adopt it in a project:
 
 1. Add `sphinx-linkcheck-diff` to `docs/requirements.txt`.
 2. Add `sphinx_linkcheck_diff` to the `extensions` list in `conf.py`.
 3. Add the `linkcheck-diff` target to the `Makefile`, as shown above.
-
-# **Known limitations**
-
-1. **The first diff for a base SHA is slow.** Collection is a venv install plus a full Sphinx build. Subsequent diffs reuse the cache.
-2. **Requires an upstream remote and one successful fetch.** Without a remote matching `github_url`, or before the first fetch, the base SHA can't be resolved and the command errors. Here "upstream" means the repo the docs describe, discovered from `github_url` — which may be your fork. A fork checkout fixes this with `git remote add upstream https://github.com/<org>/<project>`; the helper's error names the remedy.
-3. **Assumes the Sphinx Stack Makefile targets.** The helper runs `make install` and `make linkcheck` inside the worktree. A project with different targets copies the policy module and adapts its wiring (see "Implementation and packaging").
+4. Add `_dev/.linkcheck-diff/` to `docs/.gitignore`.
 
 # **CI caching**
 

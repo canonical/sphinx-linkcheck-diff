@@ -84,8 +84,8 @@ def matching_remote(repo_root: Path, github_url: str) -> str:
     listed = ", ".join(f"{name} ({url})" for name, url in remotes.items())
     raise RuntimeError(
         f"no git remote matches github_url {github_url} (configured remotes:"
-        f" {listed or 'none'}); add one with:"
-        f" git remote add upstream https://github.com/{slug}"
+        f" {listed or 'none'}); fix github_url in docs/conf.py, or add a"
+        f" matching remote: git remote add upstream https://github.com/{slug}"
     )
 
 

@@ -117,20 +117,20 @@ def _pinned_env(docs_python: str) -> dict[str, str]:
 def _baseline(docs: Path, project: Project) -> Path:
     """Run the helper in ``docs`` and return the baseline path it prints.
 
-    The Makefile recipe sources the docs venv and runs the helper with its
-    python3, capturing the printed path; that venv is also where the project's
-    conf.py imports resolve. The project venvs don't install
-    sphinx-linkcheck-diff, so the helper runs from this source tree.
+    The Makefile recipe sources the docs venv and runs the helper with `python
+    -m sphinx_linkcheck_diff`, capturing the printed path; that venv is also
+    where the project's conf.py imports resolve. The project venvs don't
+    install sphinx-linkcheck-diff, so the helper runs from this source tree.
     ``BASE_BRANCH`` routes the helper to the project's base branch; empty
     means its ``repo_default_branch``.
     """
-    code = (
-        "import sys\n"
-        "from sphinx_linkcheck_diff import sphinx_stack_baseline\n"
-        "sphinx_stack_baseline(sys.argv[1])\n"
-    )
     result = subprocess.run(
-        [str(docs / ".venv" / "bin" / "python3"), "-c", code, SPHINX_OPTS],
+        [
+            str(docs / ".venv" / "bin" / "python3"),
+            "-m",
+            "sphinx_linkcheck_diff",
+            SPHINX_OPTS,
+        ],
         capture_output=True,
         text=True,
         check=False,

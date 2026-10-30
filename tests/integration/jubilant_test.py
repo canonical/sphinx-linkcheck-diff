@@ -202,5 +202,5 @@ def test_linkcheck_diff_finds_new_and_changed(tmp_path):
     shutil.rmtree(docs / "_build", ignore_errors=True)
     build = _make_linkcheck_diff(docs, base_branch="no-such-branch")
     assert build.returncode != 0, "an unresolvable base branch fails the target"
-    assert "baseline collection failed" in build.stderr
+    assert "linkcheck-diff:" in build.stderr
     assert not (docs / "_build" / "output.json").exists()

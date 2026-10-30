@@ -25,8 +25,10 @@ dir has no Makefile, so any collection the caching fails to prevent fails
 the test loudly.
 """
 
+import importlib
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import NamedTuple
 
@@ -118,3 +120,28 @@ def test_sphinx_stack_baseline_missing_baseline(checkout, monkeypatch):
     baseline.baseline_path(checkout.docs, checkout.main_sha).unlink()
     with pytest.raises(RuntimeError, match="make install failed"):
         sphinx_stack_baseline()
+
+
+def test_main_reports_failures_as_one_line(checkout, monkeypatch, capsys):
+    # A missing baseline makes the collection fail (no Makefile), so ``main``
+    # is the thing under test: it prefixes and prints the message instead of
+    # letting the traceback through. The package re-exports the function
+    # ``sphinx_stack_baseline``, which shadows the module, so the test
+    # resolves the module itself.
+    monkeypatch.chdir(checkout.docs)
+    monkeypatch.delenv("BASE_BRANCH", raising=False)
+    baseline.baseline_path(checkout.docs, checkout.main_sha).unlink()
+
+    policy = importlib.import_module("sphinx_linkcheck_diff.sphinx_stack_baseline")
+    with pytest.raises(SystemExit) as excinfo:
+        policy.main()
+
+    # The failure is one `linkcheck-diff:` line after make's own output,
+    # with no traceback.
+    captured = capsys.readouterr()
+    assert excinfo.value.code == 1
+    assert captured.err.splitlines()[-1].startswith(
+        "linkcheck-diff: make install failed in"
+    )
+    assert "Traceback" not in captured.err
+    assert captured.out == ""

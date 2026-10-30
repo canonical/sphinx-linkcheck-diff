@@ -112,9 +112,7 @@ linkcheck: install
 # from the base branch automatically on first use and cached per base SHA.
 linkcheck-diff: install
 	@export BASE_BRANCH; \
-	CODE="from sphinx_linkcheck_diff import sphinx_stack_baseline; sphinx_stack_baseline('$(SPHINX_OPTS)')"; \
-	BASELINE=$$(. $(DOCS_VENV); python3 -c "$$CODE"); \
-	if [ ! -f "$$BASELINE" ]; then echo "linkcheck-diff: baseline collection failed" >&2; exit 1; fi; \
+	BASELINE=$$(. $(DOCS_VENV); python3 -m sphinx_linkcheck_diff '$(SPHINX_OPTS)') || exit 1; \
 	. $(DOCS_VENV); $(SPHINX_BUILD) -b linkcheck "$(DOCS_SOURCEDIR)" "$(DOCS_BUILDDIR)" $(SPHINX_OPTS) -D linkcheck_diff_baseline="$$BASELINE" || { grep --color -F "[broken]" "$(DOCS_BUILDDIR)/output.txt"; exit 1; }
 
 pa11y: pa11y-install html
