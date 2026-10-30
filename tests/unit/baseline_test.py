@@ -201,6 +201,62 @@ def test_make(tmp_path: Path):
         baseline.make("fail", cwd=tmp_path)
 
 
+def _commit_makefile(git_repo: Path, makefile: str) -> str:
+    """Commit a ``docs/Makefile`` and return the commit's SHA."""
+    docs = git_repo / "docs"
+    docs.mkdir()
+    (docs / "Makefile").write_text(makefile, encoding="utf-8")
+    _run("git", "add", "docs", cwd=git_repo)
+    _run("git", "commit", "--quiet", "--message", "docs makefile", cwd=git_repo)
+    return _run("git", "rev-parse", "HEAD", cwd=git_repo).strip()
+
+
+def test_collect_succeeds_when_linkcheck_fails(git_repo: Path):
+    # Collection's success criterion is output.json existing, not the
+    # exit code: the base branch's own settings can fail the linkcheck
+    # build after every URI is written to the file.
+    makefile = (
+        "install:\n"
+        "linkcheck:\n"
+        "\tmkdir -p _build\n"
+        '\techo \'{"uri": "https://example.com/base"}\' > _build/output.json\n'
+        "\texit 1\n"
+    )
+    sha = _commit_makefile(git_repo, makefile)
+    assert baseline.collect(git_repo, Path("docs"), sha, "") == [
+        "https://example.com/base"
+    ]
+
+
+def test_collect_fails_without_output_json(git_repo: Path, capsys):
+    # A collection build that produces no output.json fails with the
+    # build's output, instead of returning a partial or empty URI set.
+    makefile = "install:\nlinkcheck:\n\techo 'sphinx-build failed'\n\texit 1\n"
+    sha = _commit_makefile(git_repo, makefile)
+    with pytest.raises(RuntimeError, match="produced no"):
+        baseline.collect(git_repo, Path("docs"), sha, "")
+    assert "sphinx-build failed" in capsys.readouterr().err
+
+
+def test_collect_forwards_sphinx_opts(git_repo: Path, tmp_path: Path, monkeypatch):
+    # The override replaces the Makefile's SPHINX_OPTS wholesale, so the
+    # helper forwards the project's opts and appends the ignore-all flag.
+    opts_file = tmp_path / "opts.txt"
+    monkeypatch.setenv("OPTS_OUT", str(opts_file))
+    makefile = (
+        "install:\n"
+        "linkcheck:\n"
+        '\techo "$$SPHINX_OPTS" > "$$OPTS_OUT"\n'
+        "\tmkdir -p _build\n"
+        '\techo \'{"uri": "https://example.com/base"}\' > _build/output.json\n'
+    )
+    sha = _commit_makefile(git_repo, makefile)
+    baseline.collect(git_repo, Path("docs"), sha, "-c . -d _dev/.doctrees")
+    assert opts_file.read_text(encoding="utf-8").strip() == (
+        "-c . -d _dev/.doctrees -D linkcheck_ignore=.*"
+    )
+
+
 def test_parse_uris(tmp_path: Path):
     output_json = tmp_path / "output.json"
     output_json.write_text(

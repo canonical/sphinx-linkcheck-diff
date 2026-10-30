@@ -91,7 +91,10 @@ def register(app: Sphinx) -> None:
         name="linkcheck_diff_baseline",
         default="",
         # Sphinx accepts any rebuild string at runtime, but its
-        # _ConfigRebuild typing doesn't list 'linkcheck'.
+        # _ConfigRebuild typing doesn't list 'linkcheck'. The rebuild
+        # domain is 'linkcheck', not 'env': the value alternates between
+        # empty (make html) and a path (make linkcheck-diff), and an
+        # 'env' domain would re-read every doctree on each switch.
         rebuild="linkcheck",  # type: ignore[arg-type]
         types=(str,),
     )

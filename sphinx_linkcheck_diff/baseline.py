@@ -185,6 +185,10 @@ def collect(repo_root: Path, docs_dir: Path, sha: str, sphinx_opts: str) -> list
     """
     with worktree(repo_root, sha) as tree:
         docs = tree / docs_dir
+        # The env below replaces the Makefile's SPHINX_OPTS wholesale, so
+        # sphinx_opts must carry the project's own settings; the appended
+        # -D makes the linkcheck build ignore every URI while still
+        # writing them all to output.json.
         make("install", docs)
         opts = " ".join(
             part for part in (sphinx_opts, "-D linkcheck_ignore=.*") if part

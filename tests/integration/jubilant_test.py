@@ -135,12 +135,20 @@ def _broken_uris(docs: Path) -> list[str]:
     return [entry["uri"] for entry in _entries(docs) if entry["status"] == "broken"]
 
 
-def _make_linkcheck_diff(docs: Path) -> subprocess.CompletedProcess[str]:
-    """Run ``make linkcheck-diff``, printing its output when it fails."""
+def _make_linkcheck_diff(
+    docs: Path, base_branch: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Run ``make linkcheck-diff``, printing its output when it fails.
+
+    ``base_branch`` overrides the recipe's default ``BASE_BRANCH``.
+    """
+    env = {**_pinned_env(), "SPHINX_OPTS": SPHINX_OPTS}
+    if base_branch is not None:
+        env["BASE_BRANCH"] = base_branch
     result = subprocess.run(
         ["make", "linkcheck-diff"],
         cwd=docs,
-        env={**_pinned_env(), "SPHINX_OPTS": SPHINX_OPTS},
+        env=env,
         capture_output=True,
         text=True,
         check=False,
@@ -165,6 +173,12 @@ def test_linkcheck_diff_finds_new_and_changed(tmp_path):
     links. The changed link's old URI is in the baseline, and the new
     link's URI is not, so both are checked and both fail. The build must
     fail with exactly those two URIs broken.
+
+    The third run points BASE_BRANCH at a branch that doesn't exist: the
+    target must fail before any linkcheck build runs. The recipe's file
+    check is its only failure signal — the command substitution discards
+    the helper's exit code — so collection failures can never fall back
+    to a full check.
     """
     docs = _pinned_docs(tmp_path)
     _install_package(docs)
@@ -184,3 +198,9 @@ def test_linkcheck_diff_finds_new_and_changed(tmp_path):
     build = _make_linkcheck_diff(docs)
     assert build.returncode != 0, "planted broken links: a changed one and a new one"
     assert sorted(_broken_uris(docs)) == [CHANGED_URI, NEW_URI]
+
+    shutil.rmtree(docs / "_build", ignore_errors=True)
+    build = _make_linkcheck_diff(docs, base_branch="no-such-branch")
+    assert build.returncode != 0, "an unresolvable base branch fails the target"
+    assert "baseline collection failed" in build.stderr
+    assert not (docs / "_build" / "output.json").exists()
